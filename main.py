@@ -17,7 +17,11 @@ KAFKA_PORT = 9092
 SERVICE = 'mqtt_gateway'
 SERVICE_PATH = '/mqtt_gateway'
 API_KEY = SERVICE_PATH.strip('/')
-    
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected with result code {rc}")
+    client.subscribe("/iot/json")
+
 def on_message(client, userdata, message):
     print(f"Received message: {message.payload.decode('utf-8')}")
 
@@ -54,7 +58,7 @@ def main():
     mqttc.loop_start()
     for i in range(3):
         print(f"Publishing {i}")
-        mqttc.publish(device_id=temperature_sensor.device_id, payload={'t': i})
+        mqttc.publish(topic="/iot/json", payload=json.dumps({"t": i}), qos=1)
         time.sleep(1)
         
     mqttc.loop_stop()
