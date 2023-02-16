@@ -6,64 +6,41 @@ from filip.clients.mqtt import IoTAMQTTClient
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute, ServiceGroup
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
+from gateway.gateway import Gateway
 
-SERVER_IP = '161.35.205.102'
-ORION_PORT = 1026
-MQTT_PORT = 1883
-IOTA_PORT = 4041
-QL_PORT = 8668
-KAFKA_PORT = 9092
 
-SERVICE = 'mqtt_gateway'
-SERVICE_PATH = '/mqtt_gateway'
-API_KEY = SERVICE_PATH.strip('/')
+temperature_sensor = Device(device_id='device:001',
+                            entity_name='urn:ngsi-ld:Device:001',
+                            entity_type='TemperatureSensor',
+                            protocol='IoTA-JSON',
+                            transport='MQTT',
+                            attributes=[DeviceAttribute(name='temperature',
+                                                        object_id='t',
+                                                        type='Number')])
 
-def on_connect(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
-    client.subscribe("/iot/json")
+def initial_setup() -> IoTAClient | ContextBrokerClient:
+    fiware_header = FiwareHeader(service=config['gateway_setup']['fiware_service'],
+                                 service_path=config['gateway_setup']['fiware_servicepath'])
+    clear_iot_agent(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_port']}", fiware_header=fiware_header)
+    clear_context_broker((f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}"), fiware_header=fiware_header)
+    iotac = IoTAClient(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_port']}", fiware_header=fiware_header)
+    cbc = ContextBrokerClient(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}", fiware_header=fiware_header)
+    return iotac, cbc
 
-def on_message(client, userdata, message):
-    print(f"Received message: {message.payload.decode('utf-8')}")
 
-def main():    
-    fiware_header = FiwareHeader(service=SERVICE, service_path=SERVICE_PATH)
-    clear_context_broker(url=f"http://{SERVER_IP}:{ORION_PORT}", fiware_header=fiware_header)
-    clear_iot_agent(url=f"http://{SERVER_IP}:{IOTA_PORT}", fiware_header=fiware_header)
-    
-    service_group = ServiceGroup(apikey=API_KEY, resource='/iot/json')
-    
-    temperature_sensor = Device(device_id='device:001',
-                                entity_name='urn:ngsi-ld:Device:001',
-                                entity_type='TemperatureSensor',
-                                protocol='IoTA-JSON',
-                                transport='MQTT',
-                                apikey=API_KEY,
-                                attributes=[DeviceAttribute(name='temperature',
-                                                            object_id='t',
-                                                            type='Number')])
-    
-    iotac = IoTAClient(url=f"http://{SERVER_IP}:{IOTA_PORT}", fiware_header=fiware_header)
-    iotac.post_group(service_group=service_group, update=True)
+def main():
+    iotac, cbc = initial_setup()
     iotac.post_device(device=temperature_sensor, update=True)
-    
-    cbc = ContextBrokerClient(url=f"http://{SERVER_IP}:{ORION_PORT}", fiware_header=fiware_header)
-    print(cbc.get_entity(temperature_sensor.entity_name).json(indent=2))
-    
-    mqttc = IoTAMQTTClient(protocol=mqtt.MQTTv5)
-    mqttc.on_message = on_message
-    mqttc.add_service_group(service_group)
-    mqttc.add_device(temperature_sensor)
-    mqttc.connect(SERVER_IP, MQTT_PORT)
-    
-    mqttc.loop_start()
+    mqtt_gateway = Gateway()
     for i in range(3):
-        print(f"Publishing {i}")
-        mqttc.publish(topic="/iot/json", payload=json.dumps({"t": i}), qos=1)
         time.sleep(1)
-        
-    mqttc.loop_stop()
-    mqttc.disconnect()
-    pass
-    
+        print(f"Publishing {i}")
+        mqtt_gateway.publish("/gateway", json.dumps({"device_id": temperature_sensor.device_id, "temperature": i, "timestamp": time.time()}))
+        time.sleep(3)
+    print(mqtt_gateway.device_topics)
+    mqtt_gateway.remove_device_topic(temperature_sensor.device_id)
+    print(mqtt_gateway.device_topics)
+
 if __name__ == '__main__':
+    config = json.load(open('config.json'))
     main()
