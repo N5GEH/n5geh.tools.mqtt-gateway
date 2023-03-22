@@ -4,6 +4,7 @@
     "orion_port": 1026,
     "mqtt_port": 1883,
     "iota_port": 4041,
+    "iota_http_port": 7896,
     "ql_port": 8668,
     "kafka_port": 9092
   },
