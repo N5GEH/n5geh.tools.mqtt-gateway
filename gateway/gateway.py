@@ -7,6 +7,8 @@ from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute, ServiceGroup
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 
+from database import Database
+
 
 class Gateway(IoTAMQTTClient):
     def __init__(self):
@@ -17,6 +19,7 @@ class Gateway(IoTAMQTTClient):
         self.device_topics = {}
         self.connect(config['connection_settings']['server_ip'], config['connection_settings']['mqtt_port'], 60)
         self.loop_start()
+        self.database = Database()
 
     def on_connect(self, client, userdata, flags, rc) -> None:
         print(f"Connected with result code {rc}")
