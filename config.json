@@ -10,6 +10,7 @@
   },
   "gateway_setup": {
     "fiware_service": "mqtt_gateway",
-    "fiware_servicepath": "/mqttgateway"
+    "fiware_servicepath": "/mqttgateway",
+    "api_key": "plugnplay"
   }
 }

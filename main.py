@@ -6,7 +6,8 @@ from filip.clients.mqtt import IoTAMQTTClient
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute, ServiceGroup
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
-from gateway.gateway import Gateway
+
+from gateway.multientity import MqttGateway
 
 payload = {
   "end_device_ids": {
@@ -149,7 +150,7 @@ def initial_setup() -> IoTAClient | ContextBrokerClient:
 def main():
     iotac, cbc = initial_setup()
     iotac.post_device(device=temperature_sensor, update=True)
-    mqtt_gateway = Gateway()
+    mqtt_gateway = MqttGateway()
     for i in range(3):
         time.sleep(1)
         print(f"Publishing {i}")
