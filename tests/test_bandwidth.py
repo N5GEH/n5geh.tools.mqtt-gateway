@@ -23,7 +23,7 @@ client.on_message = on_message
 client.connect(mqtt_broker_address, 1883, 60)
 client.loop_start()
 
-measurement_duration = 60  # in seconds
+measurement_duration = 15  # in seconds
 message_sizes = [1, 10, 100, 1000, 10000]  # Change or add more sizes as needed
 start_time = time.time()
 

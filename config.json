@@ -12,5 +12,11 @@
     "fiware_service": "mqtt_gateway",
     "fiware_servicepath": "/mqttgateway",
     "api_key": "plugnplay"
+  },
+  "postgres_setup": {
+    "host": "161.35.205.102",
+    "user": "karelia",
+    "password": "postgres",
+    "database": "iot_gateway"
   }
 }
