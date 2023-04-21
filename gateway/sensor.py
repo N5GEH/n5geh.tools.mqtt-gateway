@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 class Lorawan(Client):
+    # Frankly this class can be used for any mqtt device, but I'm using it for lorawan devices for now
     def __init__(self, name: str, topic: str, attribute: str):
         """This class represents a lorawan device that can be added to the gateway.
         I inherit from the paho.mqtt.client.Client class to be able to use the mqtt protocol.
