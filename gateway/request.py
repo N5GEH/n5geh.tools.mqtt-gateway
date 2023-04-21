@@ -1,3 +1,6 @@
+# testing grounds for contacting Fiware via HTTP requests
+# nothing of interest here
+
 import requests
 import json
 

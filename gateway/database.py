@@ -1,3 +1,5 @@
+# Interacts with the PostgreSQL database
+
 import uuid
 import json
 import psycopg2
@@ -8,17 +10,16 @@ class PostgresDB:
     """
     def __init__(self):
         try:
-            with open("config.json") as f:
-                config = json.load(f) 
-                self.connection = psycopg2.connect(host=config["postgres_setup"]["host"],
-                                                   user=config["postgres_setup"]["user"], 
-                                                   password=config["postgres_setup"]["password"], 
-                                                   database=config["postgres_setup"]["database"])
+            config = json.load(open("config.json")) 
+            self.connection = psycopg2.connect(host=config["postgres_setup"]["host"],
+                                                user=config["postgres_setup"]["user"], 
+                                                password=config["postgres_setup"]["password"], 
+                                                database=config["postgres_setup"]["database"])
             register_uuid()
             self.cursor = self.connection.cursor()
             self.cursor.execute("""CREATE TABLE IF NOT EXISTS devices (
                                 id UUID PRIMARY KEY,
-                                device_id VARCHAR(255) NOT NULL,
+                                object_id VARCHAR(255) NOT NULL,
                                 jsonpath VARCHAR(255) NOT NULL,
                                 topic VARCHAR(255) NOT NULL
 )
@@ -75,7 +76,7 @@ class PostgresDB:
             return self.cursor.fetchone()
         except TypeError:
             print(f"Device {device_id} does not exist!")
-    
+     
     def get_device_id(self, jsonpath, topic):
         """Get the id of a device.
         
@@ -152,7 +153,6 @@ class PostgresDB:
         self.connection.close()
         self.cursor.close()
         
-    
     def __del__(self):
         self.close()
 

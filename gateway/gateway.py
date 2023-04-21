@@ -1,16 +1,17 @@
-# testing out the multientity plugin
+# Implementing the IoT Agent MQTT Gateway
 
 import paho.mqtt.client as mqtt
 import json
 import time
 import requests
-from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
+from filip.clients.ngsi_v2 import IoTAClient
 from filip.clients.mqtt import IoTAMQTTClient
 from filip.models.base import FiwareHeader
-from filip.models.ngsi_v2.iot import Device, DeviceAttribute, ServiceGroup
+from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 
 from database import PostgresDB
+from sensor import Lorawan
 
 config = json.load(open("config.json"))
 orion = f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}"
@@ -43,38 +44,32 @@ class MqttGateway:
         except requests.exceptions.HTTPError as e:
             print(f"Gateway device already exists: {e}")
 
-    def add_device(self, device: Device):
-        print(f"Adding device {device.device_id} to the gateway")
+    def add_device(self, device: Lorawan):
+        print(f"Adding device {device.name} to the gateway")
         self.gateway_device.add_attribute(
             DeviceAttribute(
-                object_id=device.device_id,
-                name=device.entity_name,
-                type="Number",
-                entity_name=f"urn:ngsi-ld:{device.entity_name}",
-                entity_type=device.entity_type,
+                object_id=device.id,
+                name=device.name,
             )
         )
-        self.database.add_device(device.device_id, device.entity_name)
+        self.database.add_device(device_id=device.id, jsonpath=f"$..{device.attribute}", topic=device.topic)
         self.iota_client.update_device(device=self.gateway_device)
 
     def remove_device(self, device: Device):
-        print(f"Removing device {device.device_id} from the gateway")
+        print(f"Removing device {device.name} from the gateway")
         self.gateway_device.delete_attribute(
             DeviceAttribute(
-                object_id=device.device_id,
-                name=device.entity_name,
-                type="Number",
-                entity_name=f"urn:ngsi-ld:{device.entity_name}",
-                entity_type=device.entity_type,
+                object_id=device.id,
+                name = device.name,
             )
         )
-        self.database.delete_device(device.device_id)
+        self.database.delete_device(device.id, device.topic)
         self.iota_client.update_device(device=self.gateway_device)
         
     def update_device(self, topic, payload):
         device = self.database.get_device_by_topic(topic)
         if device:
-            print(f"Updating device {device.device_id}")
+            print(f"Updating device {device.id}")
             update_device = self.s.post(
                 f"{iota_7896}/iot/d?k={device.device_id}&i={device.entity_name}",
                 data=payload,
@@ -90,16 +85,11 @@ class MqttGateway:
 
 
 if __name__ == "__main__":
+    
+    sensor = Lorawan('lorawan', 'test/gateway', 'temperature')
     gateway = MqttGateway()
-    new_device = Device(
-        device_id="sensor:004",
-        entity_name="urn:ngsi-ld:Sensor:004",
-        entity_type="Sensor",
-    )
-    gateway.add_device(new_device)
+    gateway.add_device(sensor)
     print(gateway.gateway_device.attributes)
     print(gateway.database.get_all_devices())
-    gateway.remove_device(new_device)
     print(gateway.gateway_device.attributes)
-    print(gateway.database.get_all_devices())
     gateway.database.delete_all_devices()
