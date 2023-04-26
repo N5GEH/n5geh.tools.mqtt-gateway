@@ -26,7 +26,7 @@ client.connect(mqtt_broker_address, 1883, 60)
 client.loop_start()
 
 num_messages = 10
-num_iterations = 5
+num_iterations = 10
 
 for freq in range(0, num_iterations * 10, 10):
     sent_messages = 0
@@ -60,6 +60,7 @@ plt.scatter(x, y, marker='o', label="Message Loss Rate")
 plt.plot(x_smooth, y_smooth, label="Smoothed Message Loss Rate")
 plt.xlabel('Messages per Second')
 plt.ylabel('Message Loss Rate')
+plt.ylim(0, 0.1)
 plt.title('Message Loss Rate vs Messages per Second')
 plt.legend()
 plt.grid(True)
