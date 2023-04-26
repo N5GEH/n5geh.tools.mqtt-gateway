@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-04-26T11:41:46.174Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36" etag="8Uch5d8qG58dWFe36EcD" version="21.2.2" type="github">
+<mxfile host="app.diagrams.net" modified="2023-04-26T11:58:39.152Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36" etag="0JPb5gSpFHXZxNrDKHDT" version="21.2.2" type="github">
   <diagram name="Page-1" id="bw7ifmK_z6_WOQg0YF7_">
     <mxGraphModel dx="1428" dy="786" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="600" math="0" shadow="0">
       <root>
@@ -44,13 +44,13 @@
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="nMgu-i1CIKQ7ZXdbveE8-8" target="nMgu-i1CIKQ7ZXdbveE8-9">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-8" value="MQTT Broker" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-8" value="MQTT Broker" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#E63323;strokeWidth=4;" vertex="1" parent="1">
           <mxGeometry x="390" y="311" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="nMgu-i1CIKQ7ZXdbveE8-9" target="nMgu-i1CIKQ7ZXdbveE8-13">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-9" value="IoT-Agent" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-9" value="IoT-Agent" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#E63323;strokeWidth=4;" vertex="1" parent="1">
           <mxGeometry x="390" y="180" width="120" height="61" as="geometry" />
         </mxCell>
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-13" value="" style="sketch=0;aspect=fixed;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=#b85450;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#E63323;shape=mxgraph.mscae.enterprise.internet;labelBackgroundColor=none;" vertex="1" parent="1">
