@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-04-26T09:51:25.579Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36" etag="2sieH0Fv70qEJ6SMFnpB" version="21.2.2" type="github">
+<mxfile host="app.diagrams.net" modified="2023-04-26T11:41:46.174Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36" etag="8Uch5d8qG58dWFe36EcD" version="21.2.2" type="github">
   <diagram name="Page-1" id="bw7ifmK_z6_WOQg0YF7_">
     <mxGraphModel dx="1428" dy="786" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="600" math="0" shadow="0">
       <root>
@@ -12,13 +12,13 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-1" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#2005eb;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_humidity_sensor;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-1" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E63323;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_humidity_sensor;" vertex="1" parent="1">
           <mxGeometry x="291" y="441" width="78" height="78" as="geometry" />
         </mxCell>
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="nMgu-i1CIKQ7ZXdbveE8-2" target="nMgu-i1CIKQ7ZXdbveE8-8">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-2" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#2005eb;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_temperature_sensor;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-2" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E63323;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_temperature_sensor;" vertex="1" parent="1">
           <mxGeometry x="411" y="441" width="78" height="78" as="geometry" />
         </mxCell>
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="nMgu-i1CIKQ7ZXdbveE8-3" target="nMgu-i1CIKQ7ZXdbveE8-8">
@@ -29,7 +29,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-3" value="" style="sketch=0;outlineConnect=0;fillColor=#2005eb;strokeColor=#A50040;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_vibration_sensor;fontColor=#ffffff;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-3" value="" style="sketch=0;outlineConnect=0;fillColor=#E63323;strokeColor=#A50040;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.iot_thing_vibration_sensor;fontColor=#ffffff;" vertex="1" parent="1">
           <mxGeometry x="531" y="441" width="78" height="78" as="geometry" />
         </mxCell>
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-4" value="Sensor 1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helvetica;" vertex="1" parent="1">
@@ -53,7 +53,7 @@
         <mxCell id="nMgu-i1CIKQ7ZXdbveE8-9" value="IoT-Agent" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="390" y="180" width="120" height="61" as="geometry" />
         </mxCell>
-        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-13" value="" style="sketch=0;aspect=fixed;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=#b85450;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#230be0;shape=mxgraph.mscae.enterprise.internet;labelBackgroundColor=none;" vertex="1" parent="1">
+        <mxCell id="nMgu-i1CIKQ7ZXdbveE8-13" value="" style="sketch=0;aspect=fixed;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=#b85450;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#E63323;shape=mxgraph.mscae.enterprise.internet;labelBackgroundColor=none;" vertex="1" parent="1">
           <mxGeometry x="402" y="51" width="96.77" height="60" as="geometry" />
         </mxCell>
       </root>
