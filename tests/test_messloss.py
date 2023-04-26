@@ -54,7 +54,6 @@ x_smooth = np.linspace(x.min(), x.max(), 300)
 spl = make_interp_spline(x, y, k=3)
 y_smooth = spl(x_smooth)
 
-# Plot message loss rate graph
 plt.figure()
 plt.scatter(x, y, marker='o', label="Message Loss Rate")
 plt.plot(x_smooth, y_smooth, label="Smoothed Message Loss Rate")

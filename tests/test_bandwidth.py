@@ -31,7 +31,7 @@ client.on_message = on_message
 client.connect(mqtt_broker_address, 1883, 60)
 client.loop_start()
 
-measurement_duration = 15  # in seconds
+measurement_duration = 15 
 message_sizes = [1024, 2048, 4096, 8192, 16384, 32768, 65536]
 start_time = time.perf_counter()
 
@@ -42,7 +42,6 @@ while time.perf_counter() - start_time < measurement_duration:
         payload = {'size': size, 'timestamp': time.perf_counter(), 'data': 'a' * size}
         client.publish("test/bandwidth", json.dumps(payload))
 
-# Plot bandwidth graph
 plt.figure()
 window_size = 5
 for size in message_sizes:

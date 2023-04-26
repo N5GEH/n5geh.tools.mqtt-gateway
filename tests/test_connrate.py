@@ -38,7 +38,6 @@ success_rate = (successful_connections / num_devices) * 100
 # Compute moving average
 moving_avg = moving_average(connection_times, window_size)
 
-# Plot connection rate graph
 plt.figure()
 plt.plot(connection_times, '-.', label="Connection Times", alpha=0.5)
 plt.plot(range(window_size - 1, num_devices), moving_avg, label=f"Moving Average (Window size {window_size})", linewidth=2)

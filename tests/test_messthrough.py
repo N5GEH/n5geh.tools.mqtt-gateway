@@ -23,7 +23,7 @@ client.connect(mqtt_broker_address, 1883, 60)
 client.loop_start()
 
 start_time = time.time()
-measurement_duration = 10  # in seconds
+measurement_duration = 10
 message_count = []
 
 while time.time() - start_time < measurement_duration:
