@@ -18,8 +18,7 @@ class PostgresDB:
             register_uuid()
             self.cursor = self.connection.cursor()
             self.cursor.execute("""CREATE TABLE IF NOT EXISTS devices (
-                                id UUID PRIMARY KEY,
-                                object_id VARCHAR(255) NOT NULL,
+                                object_id VARCHAR(255) NOT NULL PRIMARY KEY,
                                 jsonpath VARCHAR(255) NOT NULL,
                                 topic VARCHAR(255) NOT NULL
 )
@@ -30,24 +29,23 @@ class PostgresDB:
             exit(1)
 
     
-    def add_device(self, device_id, jsonpath, topic):
+    def add_datapoint(self, object_id, jsonpath, topic):
         """Add a device to the database.
 
         Args:
-            device_id (str): The id of the device.
+            object_id (str): The id of the device.
             topic (str): The topic of the device.
         """
         try:
-            device_uuid = uuid.uuid4()
-            self.cursor.execute("""INSERT INTO devices (id, device_id, jsonpath, topic) VALUES (%s, %s, %s, %s)""", (device_uuid, device_id, jsonpath, topic))
+            self.cursor.execute("""INSERT INTO devices (object_id, jsonpath, topic) VALUES (%s, %s, %s)""", (object_id, jsonpath, topic))
 
             self.connection.commit()
         
         except psycopg2.IntegrityError:
-            print(f"Device {device_id} already exists!")
+            print(f"Device {object_id} already exists!")
             self.connection.rollback()
             
-    def get_jsonpath(self, device_id, topic):
+    def get_jsonpath(self, object_id, topic):
         """Get the jsonpath of a device.
         
         Args:
@@ -57,27 +55,28 @@ class PostgresDB:
             str: The id of the device.
         """
         try:
-            self.cursor.execute("""SELECT jsonpath FROM devices WHERE device_id=%s AND topic=%s""", (device_id, topic))
+            self.cursor.execute("""SELECT jsonpath FROM devices WHERE object_id=%s AND topic=%s""", (object_id, topic))
             return self.cursor.fetchone()
         except TypeError:
-            print(f"Device {device_id} does not exist!")
+            print(f"Device {object_id} does not exist!")
         
-    def get_topic(self, device_id):
+        
+    def get_topic(self, object_id):
         """Get the topic of a device.
         
         Args:
-            device_id (str): The id of the device.
+            object_id (str): The id of the device.
         
         Returns:
             str: The topic of the device.
         """
         try:
-            self.cursor.execute("""SELECT topic FROM devices WHERE device_id=%s""", (device_id,))
+            self.cursor.execute("""SELECT topic FROM devices WHERE object_id=%s""", (object_id,))
             return self.cursor.fetchone()
         except TypeError:
-            print(f"Device {device_id} does not exist!")
+            print(f"Device {object_id} does not exist!")
      
-    def get_device_id(self, jsonpath, topic):
+    def get_object_id(self, jsonpath, topic):
         """Get the id of a device.
         
         Args:
@@ -87,7 +86,7 @@ class PostgresDB:
             str: The id of the device.
         """
         try:
-            self.cursor.execute("""SELECT device_id FROM devices WHERE jsonpath=%s AND topic=%s""", (jsonpath, topic))
+            self.cursor.execute("""SELECT object_id FROM devices WHERE jsonpath=%s AND topic=%s""", (jsonpath, topic))
             return self.cursor.fetchone()
         except TypeError:
             print("Device does not exist!")
@@ -97,18 +96,18 @@ class PostgresDB:
         self.cursor.execute("""SELECT * FROM devices""")
         return self.cursor.fetchall()
     
-    def delete_device(self, device_id, topic):
+    def delete_device(self, object_id, topic):
         """Delete a device from the database.
 
         Args:
-            device_id (str): The id of the device.
+            object_id (str): The id of the device.
             topic (str): The topic of the device.
         """
         try:
-            self.cursor.execute("""DELETE FROM devices WHERE device_id=%s AND topic=%s""", (device_id, topic))
+            self.cursor.execute("""DELETE FROM devices WHERE object_id=%s AND topic=%s""", (object_id, topic))
             self.connection.commit()
         except psycopg2.IntegrityError:
-            print(f"Device {device_id} does not exist!")
+            print(f"Device {object_id} does not exist!")
             self.connection.rollback()
     
     def delete_all_devices(self):
@@ -120,19 +119,28 @@ class PostgresDB:
             print("No devices to delete!")
             self.connection.rollback()
             
-    def update_device(self, jsonpath, topic, device_id):
+    def update_device(self, jsonpath, topic, object_id):
         """Update a device in the database.
 
         Args:
-            device_id (str): The id of the device.
+            object_id (str): The id of the device.
             topic (str): The topic of the device.
         """
         try:
-            self.cursor.execute("""UPDATE devices SET jsonpath=%s, topic=%s WHERE device_id=%s""", (jsonpath, topic, device_id))
+            self.cursor.execute("""UPDATE devices SET jsonpath=%s, topic=%s WHERE object_id=%s""", (jsonpath, topic, object_id))
             self.connection.commit()
         except psycopg2.IntegrityError:
-            print(f"Device {device_id} does not exist!")
+            print(f"Device {object_id} does not exist!")
             self.connection.rollback()
+            
+    def check_topic(self, topic: str) -> bool:
+        """Check if a topic exists in the database.
+        
+        Args:
+            topic (str): The topic of the device.
+        """
+        self.cursor.execute("""SELECT EXISTS(SELECT 1 FROM devices WHERE topic=%s)""", (topic,))
+        return True if self.cursor.fetchone()[0] else False
             
     def nuke_table(self):
         """Delete the devices table."""
@@ -157,5 +165,4 @@ class PostgresDB:
         self.close()
 
 if __name__ == "__main__":
-    database = PostgresDB()
-    database.nuke_table()
+    database = PostgresDB()    

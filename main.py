@@ -1,50 +1,47 @@
-# future entry point for the gateway
-# work in progress for now
+import asyncpg
+from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
+from typing import List
+from fastapi.middleware.cors import CORSMiddleware
 
-import paho.mqtt.client as mqtt
-import json
-import time
-from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
-from filip.clients.mqtt import IoTAMQTTClient
-from filip.models.base import FiwareHeader
-from filip.models.ngsi_v2.iot import Device, DeviceAttribute, ServiceGroup
-from filip.utils.cleanup import clear_context_broker, clear_iot_agent
+app = FastAPI()
 
-from gateway.gateway import MqttGateway
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # TODO: Change this to the frontend url
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# Database connection settings
+DATABASE_URL = "postgres://karelia:postgres@161.35.205.102:5432/iot_gateway"
 
-temperature_sensor = Device(device_id='device:001',
-                            entity_name='urn:ngsi-ld:Device:001',
-                            entity_type='TemperatureSensor',
-                            protocol='IoTA-JSON',
-                            transport='MQTT',
-                            attributes=[DeviceAttribute(name='temperature',
-                                                        object_id='t',
-                                                        type='Number')])
+async def connect_db():
+    connection = await asyncpg.connect(DATABASE_URL)
+    return connection
 
-def initial_setup() -> IoTAClient | ContextBrokerClient:
-    fiware_header = FiwareHeader(service=config['gateway_setup']['fiware_service'],
-                                 service_path=config['gateway_setup']['fiware_servicepath'])
-    clear_iot_agent(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_port']}", fiware_header=fiware_header)
-    clear_context_broker((f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}"), fiware_header=fiware_header)
-    iotac = IoTAClient(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_port']}", fiware_header=fiware_header)
-    cbc = ContextBrokerClient(f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}", fiware_header=fiware_header)
-    return iotac, cbc
+async def close_db(connection):
+    await connection.close()
 
+# Pydantic model for the data
+class MyData(BaseModel):
+    object_id: str
+    jsonpath: str
+    topic: str
 
-def main():
-    iotac, cbc = initial_setup()
-    iotac.post_device(device=temperature_sensor, update=True)
-    mqtt_gateway = MqttGateway()
-    for i in range(3):
-        time.sleep(1)
-        print(f"Publishing {i}")
-        mqtt_gateway.publish("/gateway", json.dumps({"device_id": temperature_sensor.device_id, "temperature": i, "timestamp": time.time()}))
-        time.sleep(3)
-    print(mqtt_gateway.device_topics)
-    mqtt_gateway.remove_device_topic(temperature_sensor.device_id)
-    print(mqtt_gateway.device_topics)
+# Fetch all data from the database
+@app.get("/data", response_model=List[MyData])
+async def get_all_data(conn: asyncpg.Connection = Depends(connect_db)):
+    data = await conn.fetch("SELECT object_id, jsonpath, topic FROM devices")
+    await close_db(conn)
+    return [MyData(**row) for row in data]
 
-if __name__ == '__main__':
-    config = json.load(open('config.json'))
-    main()
+# Fetch data by id from the database
+@app.get("/data/{item_id}", response_model=MyData)
+async def get_data_by_id(item_id: int, conn: asyncpg.Connection = Depends(connect_db)):
+    row = await conn.fetchrow("SELECT id, field1, field2 FROM my_table WHERE id = $1", item_id)
+    await close_db(conn)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Data not found")
+    return MyData(**row)
