@@ -3,9 +3,11 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
+import json
 
 app = FastAPI()
 
+# enable CORS for the frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # TODO: Change this to the frontend url
@@ -14,8 +16,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+config = json.load(open("config.json"))
+host=config["postgres_setup"]["host"]
+user=config["postgres_setup"]["user"] 
+password=config["postgres_setup"]["password"] 
+database=config["postgres_setup"]["database"]
+
+
 # Database connection settings
-DATABASE_URL = "postgres://karelia:postgres@161.35.205.102:5432/iot_gateway"
+DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
 
 async def connect_db():
     connection = await asyncpg.connect(DATABASE_URL)
