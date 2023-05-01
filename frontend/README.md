@@ -5,4 +5,4 @@ This is the frontend for the IoT gateway. It is a simple web application based o
 Work in progress.
 
 ## Preview
-[![Preview](preview/preview_v0.1.png)](preview/preview_v0.1.png)
+![Preview](preview/preview_v0.1.png)
