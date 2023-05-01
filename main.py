@@ -37,22 +37,22 @@ async def close_db(connection):
 
 
 # Pydantic model for the data
-class MyData(BaseModel):
+class Datapoint(BaseModel):
     object_id: str
     jsonpath: str
     topic: str
 
 
 # Fetch all data from the database
-@app.get("/data", response_model=List[MyData])
+@app.get("/data", response_model=List[Datapoint])
 async def get_all_data(conn: asyncpg.Connection = Depends(connect_db)):
     data = await conn.fetch("SELECT object_id, jsonpath, topic FROM devices")
     await close_db(conn)
-    return [MyData(**row) for row in data]
+    return [Datapoint(**row) for row in data]
 
 
 # Fetch data by id from the database
-@app.get("/data/{item_id}", response_model=MyData)
+@app.get("/data/{item_id}", response_model=Datapoint)
 async def get_data_by_id(item_id: int, conn: asyncpg.Connection = Depends(connect_db)):
     row = await conn.fetchrow(
         "SELECT id, field1, field2 FROM my_table WHERE id = $1", item_id
@@ -60,11 +60,11 @@ async def get_data_by_id(item_id: int, conn: asyncpg.Connection = Depends(connec
     await close_db(conn)
     if row is None:
         raise HTTPException(status_code=404, detail="Data not found")
-    return MyData(**row)
+    return Datapoint(**row)
 
 
-@app.post("/data", response_model=MyData, status_code=201)
-async def add_data(item: MyData, conn: asyncpg.Connection = Depends(connect_db)):
+@app.post("/data", response_model=Datapoint, status_code=201)
+async def add_data(item: Datapoint, conn: asyncpg.Connection = Depends(connect_db)):
     row = await conn.fetchrow(
         "INSERT INTO devices (object_id, jsonpath, topic) VALUES ($1, $2, $3) RETURNING *",
         item.object_id,
@@ -72,7 +72,7 @@ async def add_data(item: MyData, conn: asyncpg.Connection = Depends(connect_db))
         item.topic,
     )
     await close_db(conn)
-    return MyData(**row)
+    return Datapoint(**row)
 
 
 @app.delete("/data/{object_id}", status_code=204)
