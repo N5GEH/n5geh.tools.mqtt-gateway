@@ -1,61 +1,100 @@
+# Why'd you have to go and make things so complicated?
+# I see the way you're acting like you're somebody else
+# Gets me frustrated
+# Life's like this, you
+# You async, you await, and you fetch
+# And you say, "I'm a little bit of everything"
+# But I'm a complicated app
+# Oh no, no, no
+
+import asyncio
 import time
-import paho.mqtt.client as mqtt
-import matplotlib.pyplot as plt
 import json
-import numpy as np
-import threading
+from asyncio_mqtt import Client as MQTTClient
+import matplotlib.pyplot as plt
+from statistics import mean, stdev
+from collections import defaultdict
 
 config = json.load(open("config.json"))
 mqtt_broker_address = config["connection_settings"]["server_ip"]
 
-latencies = []
+latencies = defaultdict(list)
 
-def on_connect(client, userdata, flags, rc):
-    client.subscribe("test/latency")
-
-def on_message(client, userdata, msg):
+async def on_message(msg, num_clients):
     latency = time.time() - float(msg.payload.decode('utf-8'))
-    latencies.append(latency * 1000)
+    latencies[num_clients].append(latency * 1000)
+    print(f"Received info: {msg.payload.decode('utf-8')} with latency {latency * 1000} ms")
 
-def send_messages(freq):
-    while True:
-        time.sleep(1)
-        client.publish("test/latency", time.time())
-        msg_per_sec.append(freq)
+async def create_client():
+    async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+        while True:
+            await client.publish("test/latency", str(time.time()))
+            await asyncio.sleep(1)
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(mqtt_broker_address, 1883, 60)
-client.loop_start()
+async def create_watcher(num_clients):
+    async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+        async with client.filtered_messages("test/latency") as messages:
+            await client.subscribe("test/latency")
 
-num_threads = 100
-threads_per_step = 10
-step_duration = 5  # in seconds
-msg_per_sec = []
+            try:
+                async for msg in messages:
+                    await on_message(msg, num_clients)
+            except asyncio.CancelledError:
+                pass
 
-for step in range(0, num_threads, threads_per_step):
-    for _ in range(threads_per_step):
-        t = threading.Thread(target=send_messages, args=(step + 1,)).start()
-        print(f"Started thread {t} with frequency {step + 1}")
-    time.sleep(step_duration)
+max_clients = 100
+initial_clients = 10
+client_step = 10
+creation_interval = 3
 
-client.loop_stop()
+async def main():
+    watcher_tasks = []
 
-# Calculate mean latency and 90% confidence interval for each frequency step
-latency_data = np.array(latencies).reshape(-1, step_duration)
-mean_latencies = np.mean(latency_data, axis=1)
-confidence_interval = 1.645 * np.std(latency_data, axis=1) / np.sqrt(step_duration)
-# the 1.645 factor is the z-score for a 90% confidence interval
-# https://www.statisticshowto.com/probability-and-statistics/confidence-interval/
-# is presuming a normal distribution of the data sensible here?
+    for num_clients in range(initial_clients, max_clients + 1, client_step):
+        watcher_task = asyncio.create_task(create_watcher(num_clients))
+        watcher_tasks.append(watcher_task)
 
-# Plot latency graph with error bars
-plt.figure()
-plt.errorbar(np.arange(1, num_threads + 1, threads_per_step), mean_latencies, yerr=confidence_interval, fmt='o-', capsize=5, label="Mean Latency with 90% Confidence Interval")
-plt.xlabel('Messages per Second')
-plt.ylabel('Latency (ms)')
-plt.title('Latency vs Messages per Second')
-plt.legend()
-plt.grid(True)
-plt.show()
+    client_tasks = []
+
+    # Create initial clients
+    for _ in range(initial_clients):
+        client_tasks.append(asyncio.create_task(create_client()))
+
+    # Add more clients in steps
+    for i in range(initial_clients + client_step, max_clients + 1, client_step):
+        await asyncio.sleep(creation_interval)
+        for _ in range(client_step):
+            client_tasks.append(asyncio.create_task(create_client()))
+
+    # Wait for the last group of clients to run for the specified duration
+    await asyncio.sleep(creation_interval)
+
+    # Cancel all tasks
+    for task in client_tasks + watcher_tasks:
+        task.cancel()
+
+    # Wait for all tasks to complete or be cancelled
+    await asyncio.gather(*client_tasks, *watcher_tasks, return_exceptions=True)
+
+asyncio.run(main())
+
+def plot_results(latencies):
+    means = []
+    errors = []
+    num_clients_list = sorted(latencies.keys())
+
+    for num_clients in num_clients_list:
+        mean_latency = mean(latencies[num_clients])
+        std_dev = stdev(latencies[num_clients])
+        error = 1.645 * (std_dev / (len(latencies[num_clients]) ** 0.5))
+
+        means.append(mean_latency)
+        errors.append(error)
+
+    plt.errorbar(num_clients_list, means, yerr=errors, fmt='o', capsize=5)
+    plt.xlabel('Number of Concurrent Clients')
+    plt.ylabel('Latency (ms)')
+    plt.title('MQTT Broker Latency (90% Confidence Interval)')
+    plt.show()
+
+plot_results(latencies)

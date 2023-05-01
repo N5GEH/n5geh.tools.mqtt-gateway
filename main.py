@@ -41,8 +41,7 @@ class Datapoint(BaseModel):
     object_id: str
     jsonpath: str
     topic: str
-
-
+    
 # Fetch all data from the database
 @app.get("/data", response_model=List[Datapoint])
 async def get_all_data(conn: asyncpg.Connection = Depends(connect_db)):

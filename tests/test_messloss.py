@@ -25,7 +25,7 @@ client.on_message = on_message
 client.connect(mqtt_broker_address, 1883, 60)
 client.loop_start()
 
-num_messages = 10
+num_messages = 500
 num_iterations = 10
 
 for freq in range(0, num_iterations * 10, 10):

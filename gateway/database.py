@@ -108,6 +108,23 @@ class PostgresDB:
         """Get all devices from the database."""
         self.cursor.execute("""SELECT * FROM devices""")
         return self.cursor.fetchall()
+    
+    def get_jsonpath_and_topic(self, object_id):
+        """Get the jsonpath and topic of a device.
+
+        Args:
+            object_id (str): The id of the device.
+
+        Returns:
+            str: The jsonpath and topic of the device.
+        """
+        try:
+            self.cursor.execute(
+                """SELECT jsonpath, topic FROM devices WHERE object_id=%s""", (object_id,)
+            )
+            return self.cursor.fetchone()
+        except TypeError:
+            print(f"Device {object_id} does not exist!")
 
     def delete_device(self, object_id, topic):
         """Delete a device from the database.

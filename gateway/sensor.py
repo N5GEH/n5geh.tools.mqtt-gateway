@@ -7,7 +7,6 @@ import json
 
 from typing import Any
 
-
 class Lorawan(Client):
     # Frankly this class can be used for any mqtt device, but I'm using it for lorawan devices for now
     def __init__(self, name: str, topic: str, attribute: str):
@@ -24,7 +23,6 @@ class Lorawan(Client):
         self.id = uuid.uuid4()
         self.name = name
 
-        self.on_connect = self._on_connect
         self.attribute = attribute  # the attribute to watch
 
     config = json.load(open("config.json"))
@@ -172,15 +170,8 @@ class Lorawan(Client):
             )
             print(f"Published message to topic {self.topic}")
             time.sleep(5)
-
-    def _on_connect(
-        self,
-        client: Client,
-        userdata: Any,
-        flags: int,
-        rc: int,
-        properties: Properties = None,
-    ):
+    
+    def on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback for when the client receives a CONNACK response from the server.
 
         Args:
@@ -190,7 +181,7 @@ class Lorawan(Client):
             rc (int): The connection result.
             properties (Properties, optional): Properties for MQTT v5. Defaults to None.
         """
-        print(f"{self.name} connected to server with result code {rc}")
+        print(f"{client._client_id} connected with result code {rc}")
 
 
 if __name__ == "__main__":

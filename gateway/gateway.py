@@ -10,6 +10,7 @@ from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from uuid import uuid4
+from jsonpath_ng import parse
 
 
 from database import PostgresDB
@@ -24,7 +25,7 @@ service = config["gateway_setup"]["fiware_service"]
 servicepath = config["gateway_setup"]["fiware_servicepath"]
 header = FiwareHeader(service=service, service_path=servicepath)
 
-
+# apparently this needs to be saved as a static function/class method to be used as a callback
 class MqttGateway(IoTAMQTTClient):
     def __init__(self):
         super().__init__(client_id="gateway", protocol=mqtt.MQTTv5)
@@ -59,7 +60,13 @@ class MqttGateway(IoTAMQTTClient):
         self.database.add_datapoint(
             object_id=object_id, jsonpath=f"$..{attribute}", topic=topic
         )
-        self.iota_client.update_device(device=self.gateway_device)
+        return object_id
+        #self.iota_client.update_device(device=self.gateway_device)
+    
+    def on_message(self, client: mqtt.Client, userdata, message: mqtt.MQTTMessage):
+        print(f"Received message '{message.payload.decode()}' on topic '{message.topic}'")
+        self.send_northbound(message=message, attribute="temperature", topic=message.topic)
+
 
     def remove_datapoint(self, topic: str, attribute: str):
         print(f"Removing datapoint with attribute {attribute} and topic {topic} from the gateway")
@@ -91,13 +98,26 @@ class MqttGateway(IoTAMQTTClient):
             self.subscribe(topic)
         else:
             print(f"Already subscribed to {topic}")
+            self.subscribe(topic)  # TODO: subscribing for now anyway, but should be removed later
 
     def clean_up(self):
         clear_iot_agent(url=iota_4041, fiware_header=FiwareHeader(service, servicepath))
         clear_context_broker(
             url=orion, fiware_header=FiwareHeader(service, servicepath)
         )
-
+    
+    def send_northbound(self, message: mqtt.MQTTMessage, attribute, topic):
+        object_id = self.database.get_object_id(topic=topic, jsonpath=f"$..{attribute})")
+        print("Sending northbound message to IoT Agent via HTTP")
+        msg = json.loads(message.payload.decode())
+        output = {f'{object_id}': parse(f'$..{attribute}').find(msg)[0].value}
+        print(f"I would be sending {str(output)} to the IoT Agent")
+        #self.s.post(f"{iota_7896}/iot/d?k={config['gateway_setup']['api_key']}&i={self.gateway_device.device_id}",
+        #    data=json.dumps(f"{attribute}": {parse(f"$..{attribute}").find(message.payload.decode())[0].value}),
+        #    headers=header
+        #)
+            
+        
     def run(self):
         self.loop_forever()
 
@@ -105,5 +125,5 @@ class MqttGateway(IoTAMQTTClient):
 if __name__ == "__main__":
     sensor = Lorawan("lorawan", "test/gateway", "temperature")
     gateway = MqttGateway()
-    gateway.add_datapoint(sensor)
-    print(gateway.gateway_device.attributes)
+    id = gateway.add_datapoint(sensor.topic, sensor.attribute)
+    gateway.run()
