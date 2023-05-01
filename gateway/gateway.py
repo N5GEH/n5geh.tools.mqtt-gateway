@@ -49,30 +49,31 @@ class MqttGateway(IoTAMQTTClient):
         except requests.exceptions.HTTPError as e:
             print(f"Gateway device already exists: {e}")
 
-    def add_datapoint(self, device: Lorawan):
+    def add_datapoint(self, topic: str, attribute: str):
         object_id = str(uuid4())
-        print(f"Adding device {device.name} to the gateway")
+        print(f"Adding datapoint {object_id} with attribute {attribute} and topic {topic} to the gateway")
         self.gateway_device.add_attribute(
             DeviceAttribute(object_id=object_id, name=object_id)
         )
-        self.gateway_subscribe(topic=device.topic)
+        self.gateway_subscribe(topic=topic)
         self.database.add_datapoint(
-            object_id=object_id, jsonpath=f"$..{device.attribute}", topic=device.topic
+            object_id=object_id, jsonpath=f"$..{attribute}", topic=topic
         )
         self.iota_client.update_device(device=self.gateway_device)
 
-    def remove_datapoint(self, device: Device):
-        print(f"Removing device {device.name} from the gateway")
+    def remove_datapoint(self, topic: str, attribute: str):
+        print(f"Removing datapoint with attribute {attribute} and topic {topic} from the gateway")
+        id = self.database.get_object_id(topic=topic, attribute=attribute)
         self.gateway_device.delete_attribute(
             DeviceAttribute(
-                object_id=device.id,
-                name=device.name,
+                object_id=id,
+                name=id
             )
         )
-        self.database.delete_device(device.id, device.topic)
+        self.database.delete_device(id, topic)
         self.iota_client.update_device(device=self.gateway_device)
 
-    def update_gateway(self, topic, payload):
+    def update_gateway(self, topic: str, payload: str):
         device = self.database.get_device_by_topic(topic)
         if device:
             print(f"Updating device {device.id}")
