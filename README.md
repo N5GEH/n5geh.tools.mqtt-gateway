@@ -24,7 +24,15 @@ npm run dev
 # runs in port 5173
 ```
 
-
-
-## Preview
 ![Frontend](frontend/preview/preview_v0.1.png)
+
+
+### Baseline gateway (no gateway)
+#### Latency
+![Latency](tests/preview/test_latency.png "Latency")
+
+#### Message loss
+![Message loss](tests/preview/test_messloss.png "Message loss")
+
+#### Connection rate
+![Connection rate](tests/preview/test_connrate.png "Connection rate")

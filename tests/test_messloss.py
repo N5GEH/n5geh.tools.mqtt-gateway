@@ -40,7 +40,7 @@ async def create_watcher(num_clients):
 max_clients = 100
 initial_clients = 10
 client_step = 10
-creation_interval = 3
+creation_interval = 60
 
 async def main():
     watcher_tasks = []
