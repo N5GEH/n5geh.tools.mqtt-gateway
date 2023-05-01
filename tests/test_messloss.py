@@ -1,66 +1,96 @@
+import asyncio
 import time
-import paho.mqtt.client as mqtt
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.interpolate import make_interp_spline
 import json
+from asyncio_mqtt import Client as MQTTClient
+import matplotlib.pyplot as plt
+from collections import defaultdict, Counter
 
 config = json.load(open("config.json"))
 mqtt_broker_address = config["connection_settings"]["server_ip"]
 
-received_messages = 0
-msg_per_sec = []
-message_loss_rates = []
+sent_messages = Counter()
+received_messages = defaultdict(Counter)
 
-def on_connect(client, userdata, flags, rc):
-    client.subscribe("test/loss_rate")
+async def on_message(msg, num_clients):
+    client_id, message_id = msg.payload.decode('utf-8').split(':')
+    received_messages[num_clients][client_id] += 1
+    print(f"Received message from client {client_id} with ID {message_id}")
 
-def on_message(client, userdata, msg):
-    global received_messages
-    received_messages += 1
+async def create_client(client_id, num_clients):
+    async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+        message_id = 0
+        while True:
+            message = f"{client_id}:{message_id}"
+            await client.publish("test/message_loss", message)
+            sent_messages[client_id] += 1
+            message_id += 1
+            await asyncio.sleep(1)
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(mqtt_broker_address, 1883, 60)
-client.loop_start()
+async def create_watcher(num_clients):
+    async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+        async with client.filtered_messages("test/message_loss") as messages:
+            await client.subscribe("test/message_loss")
 
-num_messages = 500
-num_iterations = 10
+            try:
+                async for msg in messages:
+                    await on_message(msg, num_clients)
+            except asyncio.CancelledError:
+                pass
 
-for freq in range(0, num_iterations * 10, 10):
-    sent_messages = 0
-    received_messages = 0
-    current_msg_rate = freq + 1
-    msg_per_sec.append(current_msg_rate)
-    
-    for _ in range(num_messages):
-        sleep_interval = 1 / current_msg_rate
-        time.sleep(sleep_interval)
-        client.publish("test/loss_rate", "test_message")
-        sent_messages += 1
+max_clients = 100
+initial_clients = 10
+client_step = 10
+creation_interval = 3
 
-    # Give some time for the last messages to be received before calculating the loss rate
-    time.sleep(2)
-    message_loss_rate = (sent_messages - received_messages) / sent_messages
-    message_loss_rates.append(message_loss_rate)
+async def main():
+    watcher_tasks = []
 
-client.loop_stop()
+    for num_clients in range(initial_clients, max_clients + 1, client_step):
+        watcher_task = asyncio.create_task(create_watcher(num_clients))
+        watcher_tasks.append(watcher_task)
 
-# Smooth curve using spline interpolation
-x = np.array(msg_per_sec)
-y = np.array(message_loss_rates)
-x_smooth = np.linspace(x.min(), x.max(), 300)
-spl = make_interp_spline(x, y, k=3)
-y_smooth = spl(x_smooth)
+    client_tasks = []
 
-plt.figure()
-plt.scatter(x, y, marker='o', label="Message Loss Rate")
-plt.plot(x_smooth, y_smooth, label="Smoothed Message Loss Rate")
-plt.xlabel('Messages per Second')
-plt.ylabel('Message Loss Rate')
-plt.ylim(0, 0.1)
-plt.title('Message Loss Rate vs Messages per Second')
-plt.legend()
-plt.grid(True)
-plt.show()
+    # Create initial clients
+    for i in range(initial_clients):
+        client_id = f"client_{i}"
+        client_tasks.append(asyncio.create_task(create_client(client_id, initial_clients)))
+
+    # Add more clients in steps
+    for num_clients in range(initial_clients + client_step, max_clients + 1, client_step):
+        await asyncio.sleep(creation_interval)
+        for i in range(num_clients - client_step, num_clients):
+            client_id = f"client_{i}"
+            client_tasks.append(asyncio.create_task(create_client(client_id, num_clients)))
+
+    # Wait for the last group of clients to run for the specified duration
+    await asyncio.sleep(creation_interval)
+
+    # Cancel all tasks
+    for task in client_tasks + watcher_tasks:
+        task.cancel()
+
+    # Wait for all tasks to complete or be cancelled
+    await asyncio.gather(*client_tasks, *watcher_tasks, return_exceptions=True)
+
+asyncio.run(main())
+
+def plot_results(sent_messages, received_messages):
+    num_clients_list = sorted(received_messages.keys())
+    message_loss = []
+
+    for num_clients in num_clients_list:
+        total_sent = sum(sent_messages.values())
+        total_received = sum(received_messages[num_clients].values())
+        loss = (total_sent - total_received) / total_sent * 100
+        message_loss.append(loss)
+
+    plt.plot(num_clients_list, message_loss, marker='o')
+    plt.xlabel('Number of Concurrent Clients')
+    plt.ylabel('Message Loss (%)')
+    plt.ylim(bottom=0, top=0.25)
+    plt.title('MQTT Broker Message Loss')
+    plt.grid()
+    plt.show()
+
+plot_results(sent_messages, received_messages)

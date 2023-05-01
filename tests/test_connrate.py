@@ -1,48 +1,81 @@
+# Oh async, my async
+# You are the one that I adore
+# And I'll never let you go
+# Just like you never let await go before
+# Oh async, my async
+# You are my everything
+import asyncio
 import time
-import threading
-import paho.mqtt.client as mqtt
-import matplotlib.pyplot as plt
-import numpy as np
 import json
+from asyncio_mqtt import Client as MQTTClient
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from statistics import mean, stdev
 
 config = json.load(open("config.json"))
 mqtt_broker_address = config["connection_settings"]["server_ip"]
 
-def connect_device(device_id):
-    client = mqtt.Client(client_id=f"device_{device_id}")
-    client.connect(mqtt_broker_address, 1883, 60)
-    client.loop_start()
+connection_times = defaultdict(list)
 
-def moving_average(data, window_size):
-    return np.convolve(data, np.ones(window_size), 'valid') / window_size
+async def create_client(client_id, num_clients):
+    while True:
+        start_time = time.time()
+        async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+            connection_time = time.time() - start_time
+            connection_times[num_clients].append(connection_time)
+            print(f"Client {client_id} connected in {connection_time:.3f} seconds")
+        await asyncio.sleep(1)
 
-num_devices = 100
-connection_times = []
-successful_connections = 0
-window_size = 5
+max_clients = 100
+initial_clients = 10
+client_step = 10
+creation_interval = 3
 
-for i in range(num_devices):
-    start_time = time.perf_counter()
-    try:
-        threading.Thread(target=connect_device, args=(i,)).start()
-        connection_times.append(time.perf_counter() - start_time)
-        successful_connections += 1
-    except Exception as e:
-        print(f"Error connecting device {i}: {e}")
+async def main():
+    client_tasks = []
 
-time.sleep(10)  # Allow time for connections to complete
+    # Create initial clients
+    for i in range(initial_clients):
+        client_id = f"client_{i}"
+        client_tasks.append(asyncio.create_task(create_client(client_id, initial_clients)))
 
-# Calculate connection success rate
-success_rate = (successful_connections / num_devices) * 100
+    # Add more clients in steps
+    for num_clients in range(initial_clients + client_step, max_clients + 1, client_step):
+        await asyncio.sleep(creation_interval)
+        for i in range(num_clients - client_step, num_clients):
+            client_id = f"client_{i}"
+            client_tasks.append(asyncio.create_task(create_client(client_id, num_clients)))
 
-# Compute moving average
-moving_avg = moving_average(connection_times, window_size)
+    # Wait for the last group of clients to run for the specified duration
+    await asyncio.sleep(creation_interval)
 
-plt.figure()
-plt.plot(connection_times, '-.', label="Connection Times", alpha=0.5)
-plt.plot(range(window_size - 1, num_devices), moving_avg, label=f"Moving Average (Window size {window_size})", linewidth=2)
-plt.xlabel('Device Index')
-plt.ylabel('Connection Time (s)')
-plt.title(f'Connection Rate (Success Rate: {success_rate:.2f}%)')
-plt.legend()
-plt.show()
+    # Cancel all tasks
+    for task in client_tasks:
+        task.cancel()
+
+    # Wait for all tasks to complete or be cancelled
+    await asyncio.gather(*client_tasks, return_exceptions=True)
+
+asyncio.run(main())
+
+def plot_results(connection_times):
+    num_clients_list = sorted(connection_times.keys())
+    avg_connection_times = []
+    errors = []
+
+    for num_clients in num_clients_list:
+        avg_time = mean(connection_times[num_clients])
+        std_dev = stdev(connection_times[num_clients])
+        error = 1.645 * (std_dev / (len(connection_times[num_clients]) ** 0.5))
+
+        avg_connection_times.append(avg_time)
+        errors.append(error)
+
+    plt.errorbar(num_clients_list, avg_connection_times, yerr=errors, fmt='o', capsize=5)
+    plt.xlabel('Number of Concurrent Clients')
+    plt.ylabel('Average Connection Time (s)')
+    plt.title('MQTT Broker Connection Rate (90% Confidence Interval)')
+    plt.grid()
+    plt.show()
+
+plot_results(connection_times)
