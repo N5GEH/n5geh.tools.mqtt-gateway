@@ -84,6 +84,7 @@ def plot_results(latencies):
     num_clients_list = sorted(latencies.keys())
 
     for num_clients in num_clients_list:
+        latencies[num_clients] = latencies[num_clients][len(latencies[num_clients]) // 2:]
         mean_latency = mean(latencies[num_clients])
         std_dev = stdev(latencies[num_clients])
         error = 1.645 * (std_dev / (len(latencies[num_clients]) ** 0.5))

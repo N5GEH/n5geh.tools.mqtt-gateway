@@ -1,11 +1,13 @@
 # generate a lorawan device
 
-from paho.mqtt.client import Client, MQTTv5, MQTT_CLEAN_START_FIRST_ONLY, Properties
-import uuid
-import time
 import json
-
+import time
+import uuid
 from typing import Any
+
+from paho.mqtt.client import (MQTT_CLEAN_START_FIRST_ONLY, Client, MQTTv5,
+                              Properties)
+
 
 class Lorawan(Client):
     # Frankly this class can be used for any mqtt device, but I'm using it for lorawan devices for now
@@ -170,7 +172,7 @@ class Lorawan(Client):
             )
             print(f"Published message to topic {self.topic}")
             time.sleep(5)
-    
+
     def on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback for when the client receives a CONNACK response from the server.
 
@@ -185,5 +187,5 @@ class Lorawan(Client):
 
 
 if __name__ == "__main__":
-    sensor = Lorawan("lorawan", "test/gateway", "temperature")
+    sensor = Lorawan("lorawan", "test/iot", "temperature")
     sensor.run()
