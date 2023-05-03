@@ -37,10 +37,10 @@ async def create_watcher(num_clients):
             except asyncio.CancelledError:
                 pass
 
-max_clients = 100
-initial_clients = 10
-client_step = 10
-creation_interval = 60
+max_clients = 1000
+initial_clients = 100
+client_step = 100
+creation_interval = 12
 
 async def main():
     watcher_tasks = []
@@ -88,7 +88,7 @@ def plot_results(sent_messages, received_messages):
     plt.plot(num_clients_list, message_loss, marker='o')
     plt.xlabel('Number of Concurrent Clients')
     plt.ylabel('Message Loss (%)')
-    plt.ylim(bottom=0, top=0.25)
+    plt.ylim(bottom=max(0, min(message_loss)), top=max(message_loss) + 1)
     plt.title('MQTT Broker Message Loss')
     plt.grid()
     plt.show()

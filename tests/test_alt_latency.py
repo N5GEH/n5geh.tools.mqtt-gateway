@@ -2,8 +2,9 @@ import asyncio
 import time
 import json
 from asyncio_mqtt import Client as MQTTClient
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
-from statistics import mean, stdev
 from collections import defaultdict
 
 config = json.load(open("config.json"))
@@ -16,16 +17,18 @@ async def on_message(msg, num_clients):
     latencies[num_clients].append(latency * 1000)
     print(f"Received info: {msg.payload.decode('utf-8')} with latency {latency * 1000:.3f} ms")
 
-async def create_client():
+async def create_client(num_clients):
     async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
+        topic = f"test/latency/{num_clients}"
         while True:
-            await client.publish("test/latency", str(time.time()))
+            await client.publish(topic, str(time.time()))
             await asyncio.sleep(1)
 
 async def create_watcher(num_clients):
     async with MQTTClient(hostname=mqtt_broker_address, port=1883) as client:
-        async with client.filtered_messages("test/latency") as messages:
-            await client.subscribe("test/latency")
+        topic = f"test/latency/{num_clients}"
+        async with client.filtered_messages(topic) as messages:
+            await client.subscribe(topic)
 
             try:
                 async for msg in messages:
@@ -33,20 +36,21 @@ async def create_watcher(num_clients):
             except asyncio.CancelledError:
                 pass
 
-max_clients = 100
-initial_clients = 10
-client_step = 10
-creation_interval = 12
+max_clients = 1200
+initial_clients = 100
+client_step = 100
+creation_interval = 60
 
 async def main():
     client_tasks = []
     watcher_tasks = []
 
     for num_clients in range(initial_clients, max_clients + 1, client_step):
-        # Create initial clients
-        for _ in range(num_clients if num_clients == initial_clients else client_step):
-            client_tasks.append(asyncio.create_task(create_client()))
+        # Create new clients
+        for _ in range(num_clients):
+            client_tasks.append(asyncio.create_task(create_client(num_clients)))
 
+        # Create a new watcher for the current number of clients
         watcher_task = asyncio.create_task(create_watcher(num_clients))
         watcher_tasks.append(watcher_task)
         await asyncio.sleep(creation_interval)
@@ -60,27 +64,25 @@ async def main():
 
     # Wait for all tasks to complete or be cancelled
     await asyncio.gather(*client_tasks, *watcher_tasks, return_exceptions=True)
-
+    
 asyncio.run(main())
 
-def plot_results(latencies):
-    means = []
-    errors = []
+def plot_results_seaborn(latencies):
     num_clients_list = sorted(latencies.keys())
-
+    
+    latency_data = []
     for num_clients in num_clients_list:
-        latencies[num_clients] = latencies[num_clients][len(latencies[num_clients]) // 2:]
-        mean_latency = mean(latencies[num_clients])
-        std_dev = stdev(latencies[num_clients])
-        error = 1.645 * (std_dev / (len(latencies[num_clients]) ** 0.5))
-
-        means.append(mean_latency)
-        errors.append(error)
-
-    plt.errorbar(num_clients_list, means, yerr=errors, fmt='o', capsize=5)
+        for latency in latencies[num_clients]:
+            latency_data.append({'num_clients': num_clients, 'latency': latency})
+            
+    latency_df = pd.DataFrame(latency_data)
+    
+    sns.set_theme(style="darkgrid")
+    plt.figure(figsize=(8, 6))
+    sns.pointplot(data=latency_df, x='num_clients', y='latency', errorbar=('ci', 90), capsize=.2, markers='o', linestyles='')
     plt.xlabel('Number of Concurrent Clients')
     plt.ylabel('Latency (ms)')
     plt.title('MQTT Broker Latency (90% Confidence Interval)')
     plt.show()
 
-plot_results(latencies)
+plot_results_seaborn(latencies)

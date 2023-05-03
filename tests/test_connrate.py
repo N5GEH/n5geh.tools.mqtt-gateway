@@ -26,10 +26,10 @@ async def create_client(client_id, num_clients):
             print(f"Client {client_id} connected in {connection_time:.3f} seconds")
         await asyncio.sleep(1)
 
-max_clients = 100
-initial_clients = 10
-client_step = 10
-creation_interval = 60
+max_clients = 1000
+initial_clients = 100
+client_step = 100
+creation_interval = 12
 
 async def main():
     client_tasks = []

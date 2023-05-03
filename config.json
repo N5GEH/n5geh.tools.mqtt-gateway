@@ -1,6 +1,6 @@
 {
     "connection_settings": {
-      "server_ip": "test.mosquitto.org",
+      "server_ip": "161.35.205.102",
       "orion_port": 1026,
       "mqtt_port": 1883,
       "iota_port": 4041,
