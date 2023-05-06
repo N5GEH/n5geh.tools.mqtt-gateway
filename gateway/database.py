@@ -3,6 +3,7 @@
 import json
 import psycopg2
 from psycopg2.extras import register_uuid
+from psycopg2.pool import SimpleConnectionPool
 
 
 class PostgresDB:
@@ -125,6 +126,23 @@ class PostgresDB:
             return self.cursor.fetchone()
         except TypeError:
             print(f"Device {object_id} does not exist!")
+    
+    def get_datapoint(self, topic: str):
+        """Get the object id and topic of a device.
+
+        Args:
+            jsonpath (str): The jsonpath of the device.
+
+        Returns:
+            str: The object id and topic of the device.
+        """
+        try:
+            self.cursor.execute(
+                """SELECT object_id, jsonpath FROM devices WHERE topic=%s""", (topic,)
+            )
+            return self.cursor.fetchall()
+        except TypeError:
+            print(f"Device {jsonpath} does not exist!")
 
     def delete_device(self, object_id, topic):
         """Delete a device from the database.
