@@ -65,11 +65,20 @@ async def get_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_c
 @app.post("/data", response_model=Datapoint, status_code=201)
 async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)):
     try:
+        # check if there is already a device subscribed to the same topic
+        # if so, the gateway will not subscribe to the topic again
+        subscribe = await conn.fetchrow(
+            """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
+            datapoint.topic, datapoint.object_id
+        )
         await conn.execute(
             """INSERT INTO devices (object_id, jsonpath, topic) VALUES ($1, $2, $3)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic
         )
-        redis_client.publish("add_datapoint", datapoint.topic)
+        redis_client.publish("add_datapoint", json.dumps({"object_id": datapoint.object_id,
+                                                            "jsonpath": datapoint.jsonpath,
+                                                            "topic": datapoint.topic,
+                                                            "subscribe": subscribe is None}))
         return datapoint
     
     except asyncpg.exceptions.UniqueViolationError:
@@ -77,15 +86,24 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
-    topic = await conn.fetchval(
-        """SELECT topic FROM devices WHERE object_id=$1""",
+    topic, jsonpath = await conn.fetchrow(
+        """SELECT topic, jsonpath FROM devices WHERE object_id=$1""",
         object_id
+    )
+    # check if the topic is the last subscriber
+    # if so, the gateway will unsubscribe from the topic
+    unsubscribe = await conn.fetchrow(
+        """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
+        topic, object_id
     )
     await conn.execute(
         """DELETE FROM devices WHERE object_id=$1""",
         object_id
     )
-    redis_client.publish("remove_datapoint", topic)
+    redis_client.publish("remove_datapoint", json.dumps({"object_id": object_id,
+                                                         "topic": topic,
+                                                         "jsonpath": jsonpath,
+                                                         "unsubscribe": unsubscribe is None}))
     return None
 
 

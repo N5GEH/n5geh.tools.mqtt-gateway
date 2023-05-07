@@ -105,9 +105,9 @@ class PostgresDB:
         except TypeError:
             print("Device does not exist!")
 
-    def get_all_devices(self):
-        """Get all devices from the database."""
-        self.cursor.execute("""SELECT * FROM devices""")
+    def get_all_datapoints(self):
+        """Get all datapoints from the database."""
+        self.cursor.execute("""SELECT object_id, jsonpath, topic FROM devices""")
         return self.cursor.fetchall()
         
     def get_all_topics(self):
@@ -147,7 +147,7 @@ class PostgresDB:
             )
             return self.cursor.fetchall()
         except TypeError:
-            print(f"Device {jsonpath} does not exist!")
+            print(f"The topic {topic} does not exist!")
 
     def delete_device(self, object_id, topic):
         """Delete a device from the database.
