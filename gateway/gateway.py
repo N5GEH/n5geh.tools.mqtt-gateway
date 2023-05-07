@@ -14,6 +14,9 @@ from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse
 from sensor import Lorawan
 from threading import Thread
+from time import sleep
+from paho.mqtt.subscribeoptions import SubscribeOptions
+import redis
 
 config = json.load(open("config.json"))
 mqtt_broker_address = config["connection_settings"]["server_ip"]
@@ -33,8 +36,11 @@ class MqttGateway(IoTAMQTTClient):
 
         s = requests.Session()
         self.iota_client = IoTAClient(url=iota_4041, session=s, fiware_header=header)
-
+        self.redis_client = redis.Redis(host=config["connection_settings"]["server_ip"], port=6379, db=0)
         self.database = PostgresDB()
+        self.pubsub = self.redis_client.pubsub()
+        self.pubsub.subscribe('add_datapoint')
+        self.pubsub.subscribe('remove_datapoint')
 
         # create gateway device
         self.gateway_device = Device(
@@ -43,6 +49,9 @@ class MqttGateway(IoTAMQTTClient):
             entity_type="Gateway",
             protocol="IoTA-JSON",
         )
+        
+        for topic in self.database.get_all_topics():
+            self.gateway_subscribe(topic=topic[0])  # topic is a tuple with one element (topic,) so we need to get the first element
 
         try:
             self.iota_client.post_device(device=self.gateway_device, update=False)
@@ -103,32 +112,32 @@ class MqttGateway(IoTAMQTTClient):
             print(f"Device not found for topic {topic}")
 
     def gateway_subscribe(self, topic):
-        if not self.database.check_topic(topic):
-            self.subscribe(topic)
-        else:
-            print(f"Already subscribed to {topic}")
-            self.subscribe(
-                topic
-            )  # TODO: subscribing for now anyway, but should be removed later
+        print(f"Subscribing to topic {topic}")
+        self.subscribe(topic=(topic, SubscribeOptions(qos=0)))
+    
+    def gateway_unsubscribe(self, topic):
+        print(f"Unsubscribing from topic {topic}")
+        self.unsubscribe(topic=topic)
 
     def clean_up(self):
         clear_iot_agent(url=iota_4041, fiware_header=FiwareHeader(service, servicepath))
         clear_context_broker(
             url=orion, fiware_header=FiwareHeader(service, servicepath)
         )
+    
+    def redis_listener(self):
+        for message in self.pubsub.listen():
+            if message['type'] == 'message':
+                if message['channel'] == b'add_datapoint':
+                    print(message)
+                    self.gateway_subscribe(topic=message['data'].decode('utf-8'))
+                if message['channel'] == b'remove_datapoint' and not self.database.check_topic(message['data'].decode('utf-8')):
+                    self.gateway_unsubscribe(topic=message['data'].decode('utf-8'))
 
     def run(self):
         
         t1 = Thread(target=self.loop_forever)
-        
-        def t2():
-            while True:
-                topic = shared_queue.get()
-                print(f"Subscribing to {topic}")
-                self.gateway_subscribe(topic)
-                shared_queue.task_done()
-        
-        t2 = Thread(target=t2)
+        t2 = Thread(target=self.redis_listener)
         t1.start()
         t2.start()
         t1.join()

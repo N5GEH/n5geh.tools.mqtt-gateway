@@ -109,6 +109,11 @@ class PostgresDB:
         """Get all devices from the database."""
         self.cursor.execute("""SELECT * FROM devices""")
         return self.cursor.fetchall()
+        
+    def get_all_topics(self):
+        """Get all topics from the database."""
+        self.cursor.execute("""SELECT topic FROM devices""")
+        return self.cursor.fetchall()
     
     def get_jsonpath_and_topic(self, object_id):
         """Get the jsonpath and topic of a device.

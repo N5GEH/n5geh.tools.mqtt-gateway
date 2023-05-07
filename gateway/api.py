@@ -5,11 +5,10 @@ from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
-from queue import Queue
+import redis
 
 app = FastAPI()
-shared_queue = Queue()
-
+redis_client = redis.Redis(host="localhost", port=6379, db=0)
 # enable CORS for the frontend
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +23,7 @@ host = config["postgres_setup"]["host"]
 user = config["postgres_setup"]["user"]
 password = config["postgres_setup"]["password"]
 database = config["postgres_setup"]["database"]
+redis_client = redis.Redis(host=config["connection_settings"]["server_ip"], port=6379, db=0)
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -69,8 +69,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             """INSERT INTO devices (object_id, jsonpath, topic) VALUES ($1, $2, $3)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic
         )
-        shared_queue.put(datapoint.topic)
-        print(shared_queue.get())
+        redis_client.publish("add_datapoint", datapoint.topic)
         return datapoint
     
     except asyncpg.exceptions.UniqueViolationError:
@@ -78,10 +77,15 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
+    topic = await conn.fetchval(
+        """SELECT topic FROM devices WHERE object_id=$1""",
+        object_id
+    )
     await conn.execute(
         """DELETE FROM devices WHERE object_id=$1""",
         object_id
     )
+    redis_client.publish("remove_datapoint", topic)
     return None
 
 
