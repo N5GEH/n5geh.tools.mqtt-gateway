@@ -7,7 +7,6 @@ from threading import Thread
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
-import redis
 import requests
 from database import PostgresDB
 from filip.clients.mqtt import IoTAMQTTClient
@@ -40,12 +39,6 @@ class MqttGateway(IoTAMQTTClient):
         self.database = PostgresDB()
 
         # Setting up Redis pubsub for adding and removing datapoints
-        self.redis_client = redis.Redis(
-            host=config["connection_settings"]["server_ip"], port=6379, db=0
-        )
-        self.pubsub = self.redis_client.pubsub()
-        self.pubsub.subscribe("add_datapoint")
-        self.pubsub.subscribe("remove_datapoint")
 
         # Create gateway device
         self.gateway_device = Device(
@@ -182,23 +175,27 @@ class MqttGateway(IoTAMQTTClient):
             url=orion, fiware_header=FiwareHeader(service, servicepath)
         )
 
-    def redis_listener(self):
+    def postgres_listener(self):
         """
-        Listens to Redis for new topics to subscribe or unsubscribe to.
+        Listens to Postgres for new topics to subscribe or unsubscribe to.
         """
-        for message in self.pubsub.listen():
-            if message['type'] == 'message':
-                if message['channel'] == b'add_datapoint':
-                    data = json.loads(message['data'].decode('utf-8'))
-                    print(data)
+        self.database.cursor.execute("LISTEN add_datapoint;")
+        self.database.cursor.execute("LISTEN remove_datapoint;")
+        while True:
+            self.database.connection.poll()
+            while self.database.connection.notifies:
+                notify = self.database.connection.notifies.pop(0)
+                print("Got NOTIFY:", notify.pid, notify.channel, notify.payload)
+                if notify.channel == 'add_datapoint':
+                    data = json.loads(notify.payload)
                     self.add_datapoint(
                         object_id=data['object_id'],
                         jsonpath=data['jsonpath'],
                         topic=data['topic'],
                         subscribe=data['subscribe']
                     )
-                if message['channel'] == b'remove_datapoint':
-                    data = json.loads(message['data'].decode('utf-8'))
+                if notify.channel == 'remove_datapoint':
+                    data = json.loads(notify.payload)
                     self.remove_datapoint(
                         object_id=data['object_id'],
                         topic=data['topic'],
@@ -212,7 +209,7 @@ class MqttGateway(IoTAMQTTClient):
         Simultaneously listens to Redis for new topics to subscribe or unsubscribe to.
         """
         t1 = Thread(target=self.loop_forever)
-        t2 = Thread(target=self.redis_listener)
+        t2 = Thread(target=self.postgres_listener)
         t1.start()
         t2.start()
         t1.join()
