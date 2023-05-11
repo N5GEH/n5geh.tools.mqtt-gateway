@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 import requests
-from database import PostgresDB
+from adatabase import PostgresDB
 from filip.clients.mqtt import IoTAMQTTClient
 from filip.clients.ngsi_v2 import IoTAClient
 from filip.models.base import FiwareHeader
@@ -179,29 +179,7 @@ class MqttGateway(IoTAMQTTClient):
         """
         Listens to Postgres for new topics to subscribe or unsubscribe to.
         """
-        self.database.cursor.execute("LISTEN add_datapoint;")
-        self.database.cursor.execute("LISTEN remove_datapoint;")
-        while True:
-            self.database.connection.poll()
-            while self.database.connection.notifies:
-                notify = self.database.connection.notifies.pop(0)
-                print("Got NOTIFY:", notify.pid, notify.channel, notify.payload)
-                if notify.channel == 'add_datapoint':
-                    data = json.loads(notify.payload)
-                    self.add_datapoint(
-                        object_id=data['object_id'],
-                        jsonpath=data['jsonpath'],
-                        topic=data['topic'],
-                        subscribe=data['subscribe']
-                    )
-                if notify.channel == 'remove_datapoint':
-                    data = json.loads(notify.payload)
-                    self.remove_datapoint(
-                        object_id=data['object_id'],
-                        topic=data['topic'],
-                        jsonpath=data['jsonpath'],
-                        unsubscribe=data['unsubscribe']
-                    )
+        # method goes here
 
     def run(self):
         """

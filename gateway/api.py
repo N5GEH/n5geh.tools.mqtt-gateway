@@ -46,7 +46,8 @@ async def get_connection():
     async with app.state.pool.acquire() as connection:
         yield connection
         
-async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection = Depends(get_connection)):
+async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
+    print(f"Sending notification to channel {channel} with payload {payload}")
     await conn.execute(f"NOTIFY {channel}, '{payload}'")
     
 @app.get("/data", response_model=List[Datapoint])
@@ -80,7 +81,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
         await postgres_notify("add_datapoint", json.dumps({"object_id": datapoint.object_id,
                                                             "jsonpath": datapoint.jsonpath,
                                                             "topic": datapoint.topic,
-                                                            "subscribe": subscribe is None}))
+                                                            "subscribe": subscribe is None}), conn)
         return datapoint
     
     except asyncpg.exceptions.UniqueViolationError:
@@ -106,7 +107,7 @@ async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(ge
     await postgres_notify("remove_datapoint", json.dumps({"object_id": object_id,
                                                          "topic": topic,
                                                          "jsonpath": jsonpath,
-                                                         "unsubscribe": unsubscribe is None}))
+                                                         "unsubscribe": unsubscribe is None}), conn)
     return None
 
 
