@@ -5,10 +5,8 @@ from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
-import redis
 
 app = FastAPI()
-redis_client = redis.Redis(host="localhost", port=6379, db=0)
 # enable CORS for the frontend
 app.add_middleware(
     CORSMiddleware,
