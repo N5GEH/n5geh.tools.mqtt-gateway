@@ -39,6 +39,10 @@ class PostgresDB:
     async def get_all_topics(self):
         async with self.pool.acquire() as conn:
             return await conn.fetch("""SELECT topic FROM devices""")
+        
+    async def get_all_unique_topics(self):
+        async with self.pool.acquire() as conn:
+            return await conn.fetch("""SELECT DISTINCT topic FROM devices""")
 
     async def get_jsonpath_and_topic(self, object_id):
         async with self.pool.acquire() as conn:
@@ -91,7 +95,7 @@ class PostgresDB:
             await conn.execute("""DROP TABLE devices""")
 
     async def close(self):
-        await self.pool.close()
+        await self.pool.close() if self.pool else None
 
     async def __aenter__(self):
         await self.init()
@@ -99,9 +103,6 @@ class PostgresDB:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
-
-    def __del__(self):
-        asyncio.run(self.close())
 
 
 if __name__ == "__main__":
