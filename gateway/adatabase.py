@@ -5,10 +5,9 @@ import asyncpg
 class PostgresDB:
     def __init__(self):
         self.pool = None
-        self.config = json.load(open("config.json"))
-        asyncio.run(self.init())
 
     async def init(self):
+        self.config = json.load(open("config.json"))
         self.pool = await asyncpg.create_pool(
             host=self.config["postgres_setup"]["host"],
             user=self.config["postgres_setup"]["user"],
@@ -24,11 +23,6 @@ class PostgresDB:
 )
 """
             )
-            await conn.add_listener("add_datapoint", self.handle_notify)
-            await conn.add_listener("remove_datapoint", self.handle_notify)
-
-    async def handle_notify(self, conn, pid, channel, payload):
-        print(f"Got NOTIFY: {pid}, {channel}, {payload}")
 
     async def get_object_id(self, jsonpath, topic):
         async with self.pool.acquire() as conn:
@@ -100,6 +94,7 @@ class PostgresDB:
         await self.pool.close()
 
     async def __aenter__(self):
+        await self.init()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

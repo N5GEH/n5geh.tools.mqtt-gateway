@@ -1,11 +1,8 @@
 """
-This module implements the IoT Agent MQTT Gateway.
+This module implements the MQTT IoT Gateway.
 """
 
 import json
-from threading import Thread
-from uuid import uuid4
-
 import paho.mqtt.client as mqtt
 import requests
 from adatabase import PostgresDB
@@ -16,6 +13,9 @@ from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse
 from paho.mqtt.subscribeoptions import SubscribeOptions
+import asyncpg
+import asyncio
+from asyncio_mqtt import Client, MqttError
 
 # Load configuration from JSON file
 config = json.load(open("config.json"))
@@ -28,41 +28,31 @@ servicepath = config["gateway_setup"]["fiware_servicepath"]
 header = FiwareHeader(service=service, service_path=servicepath)
 api_key = config["gateway_setup"]["api_key"]
 
-class MqttGateway(IoTAMQTTClient):
+host = config["postgres_setup"]["host"]
+user = config["postgres_setup"]["user"]
+password = config["postgres_setup"]["password"]
+database = config["postgres_setup"]["database"]
+
+DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
+
+class MqttGateway(Client):
     def __init__(self):
-        super().__init__(client_id="gateway", protocol=mqtt.MQTTv5)
-
-        self.connect(host=mqtt_broker_address)
-
+        super().__init__(hostname=mqtt_broker_address, client_id="gateway", protocol=mqtt.MQTTv5)
         self.s = requests.Session()
-        self.iota_client = IoTAClient(url=iota_4041, session=self.s, fiware_header=header)
-        self.database = PostgresDB()
-
-        # Setting up Redis pubsub for adding and removing datapoints
-
         # Create gateway device
         self.gateway_device = Device(
             device_id="gateway:001",
             entity_name="ngsi-ld:urn:Gateway:001",
             entity_type="Gateway",
             protocol="IoTA-JSON",
-        )
-        
-        initial_topics = []
-        # Subscribe to all topics from the database
-        for object_id, jsonpath, topic in self.database.get_all_datapoints():
-            self.add_datapoint(
-                object_id=object_id, 
-                jsonpath=jsonpath, 
-                topic=topic, 
-                subscribe=True if topic not in initial_topics else False
-            )
-            initial_topics.append(topic) if topic not in initial_topics else None
+        )        
+        self.iota_client = IoTAClient(url=iota_4041, session=self.s, fiware_header=header)
         try:
             self.iota_client.post_device(device=self.gateway_device, update=False)
         except requests.exceptions.HTTPError as e:
             print(f"Gateway device already exists: {e}")
 
+            
     def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool) -> None:
         """
         Adds a new datapoint to the gateway.
@@ -78,11 +68,6 @@ class MqttGateway(IoTAMQTTClient):
         print(
             f"Adding datapoint {object_id} with jsonpath {jsonpath} and topic {topic} to the gateway"
         )
-        self.gateway_device.add_attribute(
-            DeviceAttribute(object_id=object_id, name=object_id)
-        )
-        self.gateway_subscribe(topic=topic) if subscribe else None
-        self.iota_client.update_device(device=self.gateway_device)
 
     def remove_datapoint(self, object_id: str, jsonpath: str, topic: str, unsubscribe: bool) -> None:
         """
@@ -96,104 +81,67 @@ class MqttGateway(IoTAMQTTClient):
         print(
             f"Removing datapoint with jsonpath {jsonpath} and topic {topic} from the gateway"
         )
-        self.gateway_device.delete_attribute(DeviceAttribute(object_id=object_id, name=object_id))
-        self.gateway_unsubscribe(topic=topic) if unsubscribe else None
-        self.iota_client.update_device(device=self.gateway_device)
 
-    def on_message(self, client: mqtt.Client, userdata, message: mqtt.MQTTMessage):
-        """
-        Callback function that processes incoming MQTT messages.
-
-        Args:
-            client (mqtt.Client): The MQTT client instance.
-            userdata: User-defined data passed to the callback.
-            message (mqtt.MQTTMessage): The received MQTT message.
-        """
-        print(f"Received message on topic '{message.topic}'")
-        datapoints = self.database.get_datapoint(topic=message.topic)
+    async def on_message(self, topic, payload):
+        print(f"Received message on topic '{topic}'")
+        datapoints = await self.database.get_datapoint(topic=topic)
         if not datapoints:
-            print(f"No datapoint found for topic {message.topic}")
+            print(f"No datapoint found for topic {topic}")
             return
         for datapoint in datapoints:
             object_id, jsonpath = datapoint
-            data = parse(jsonpath).find(json.loads(message.payload))
+            data = parse(jsonpath).find(json.loads(payload))
             if data:
                 print(f"I will be sending <{object_id}: {data[0].value}> to the IoT Agent")
-                #request = self.s.post(
-                #    f"{iota_7896}/iot/json?k={api_key}&i={object_id}",
-                #    headers={"Content-Type": "application/json"},
-                #    data=json.dumps({object_id: data[0].value}),
-                #)
-                #print(request.text)
 
-    def update_gateway(self, topic: str, payload: str):
+    async def mqtt_listener(self):
+        async with PostgresDB() as database:
+            async with Client(mqtt_broker_address) as client:
+                for object_id, jsonpath, topic in await database.get_all_datapoints():
+                    await client.subscribe(topic)
+                    print(f"Subscribed to topic {topic}")
+                async with client.messages() as messages:
+                    async for message in messages:
+                        payload = message.payload.decode()
+                        topic = message.topic
+                        await self.on_message(topic=topic, payload=payload)
+    
+    async def postgres_listener(self):
         """
-        Updates the gateway based on the given topic and payload.
-
+        Listens to PostgreSQL for new topics to subscribe or unsubscribe to.
+        """
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.add_listener("add_datapoint", self.on_postgres_notification)
+        await conn.add_listener("remove_datapoint", self.on_postgres_notification)
+        
+        while True:
+            await asyncio.sleep(1)  # keeps the connection alive
+        
+    def on_postgres_notification(self, conn: asyncpg.Connection, pid: int, channel: str, payload: str):
+        """
+        Callback function that processes PostgreSQL notifications.
+        
         Args:
-            topic (str): The topic associated with the update.
-            payload (str): The payload containing the update information.
+            conn (asyncpg.Connection): The connection that received the notification.
+            pid (int): The process ID of the connection that received the notification.
+            channel (str): The name of the channel that received the notification.
+            payload (str): The payload of the notification.
         """
-        device = self.database.get_device_by_topic(topic)
-        if device:
-            print(f"Updating device {device.id}")
-            update_gateway = self.s.post(
-                f"{iota_7896}/iot/d?k={device.device_id}&i={device.entity_name}",
-                data=payload,
-                headers=header,
-            )
-            print(update_gateway.text)
-        else:
-            print(f"Device not found for topic {topic}")
-
-    def gateway_subscribe(self, topic: str):
-        """
-        Subscribes the gateway to a given topic.
-
-        Args:
-            topic (str): The topic to subscribe to.
-        """
-        print(f"Subscribing to topic {topic}")
-        self.subscribe(topic=(topic, SubscribeOptions(qos=0)))
-
-    def gateway_unsubscribe(self, topic: str):
-        """
-        Unsubscribes the gateway from a given topic.
-
-        Args:
-            topic (str): The topic to unsubscribe from.
-        """
-        print(f"Unsubscribing from topic {topic}")
-        self.unsubscribe(topic=topic)
-
-    def clean_up(self):
-        """
-        Cleans up the gateway by clearing the IoT agent and context broker.
-        """
-        clear_iot_agent(url=iota_4041, fiware_header=FiwareHeader(service, servicepath))
-        clear_context_broker(
-            url=orion, fiware_header=FiwareHeader(service, servicepath)
-        )
-
-    def postgres_listener(self):
-        """
-        Listens to Postgres for new topics to subscribe or unsubscribe to.
-        """
-        # method goes here
-
-    def run(self):
+        print(f"Received notification on channel '{channel}'")
+        if channel == "add_datapoint":
+            self.add_datapoint(**json.loads(payload))
+        elif channel == "remove_datapoint":
+            self.remove_datapoint(**json.loads(payload))
+                
+    async def run(self):
         """
         Starts the gateway and runs the main loop.
-        Simultaneously listens to Redis for new topics to subscribe or unsubscribe to.
+        Simultaneously listens to Postgres for new topics to subscribe or unsubscribe to.
         """
-        t1 = Thread(target=self.loop_forever)
-        t2 = Thread(target=self.postgres_listener)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        tasks = [self.mqtt_listener(), self.postgres_listener()]
+        await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
     gateway = MqttGateway()
-    gateway.run()
-           
+    asyncio.run(gateway.run())
