@@ -133,8 +133,9 @@ class MqttGateway(Client):
         """
         async with PostgresDB() as database:
             for topic in await database.get_all_unique_topics():
-                real_topic = str(topic).split("'")[1]
-                await self.subscribe(real_topic)
+                print(f"Subscribing to topic {topic}")
+                real_topic = str(topic).split("'")[1]  # for some reason the topic is returned as <Record topic='topic'>, any way to avoid this?
+                await client.subscribe(real_topic)
                 print(f"Subscribed to topic {real_topic}")
             async with client.messages() as messages:
                 async for message in messages:
