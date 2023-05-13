@@ -5,7 +5,7 @@ This module implements the MQTT IoT Gateway.
 import json
 import paho.mqtt.client as mqtt
 import requests
-from adatabase import PostgresDB
+from gateway.database import PostgresDB
 from filip.clients.ngsi_v2 import IoTAClient
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute
