@@ -5,10 +5,8 @@ from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
-import redis
 
 app = FastAPI()
-redis_client = redis.Redis(host="localhost", port=6379, db=0)
 # enable CORS for the frontend
 app.add_middleware(
     CORSMiddleware,
@@ -23,7 +21,6 @@ host = config["postgres_setup"]["host"]
 user = config["postgres_setup"]["user"]
 password = config["postgres_setup"]["password"]
 database = config["postgres_setup"]["database"]
-redis_client = redis.Redis(host=config["connection_settings"]["server_ip"], port=6379, db=0)
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -46,6 +43,10 @@ async def shutdown():
 async def get_connection():
     async with app.state.pool.acquire() as connection:
         yield connection
+        
+async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
+    print(f"Sending notification to channel {channel} with payload {payload}")
+    await conn.execute(f"NOTIFY {channel}, '{payload}'")
     
 @app.get("/data", response_model=List[Datapoint])
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
@@ -75,10 +76,10 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             """INSERT INTO devices (object_id, jsonpath, topic) VALUES ($1, $2, $3)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic
         )
-        redis_client.publish("add_datapoint", json.dumps({"object_id": datapoint.object_id,
+        await postgres_notify("add_datapoint", json.dumps({"object_id": datapoint.object_id,
                                                             "jsonpath": datapoint.jsonpath,
                                                             "topic": datapoint.topic,
-                                                            "subscribe": subscribe is None}))
+                                                            "subscribe": subscribe is None}), conn)
         return datapoint
     
     except asyncpg.exceptions.UniqueViolationError:
@@ -100,10 +101,11 @@ async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(ge
         """DELETE FROM devices WHERE object_id=$1""",
         object_id
     )
-    redis_client.publish("remove_datapoint", json.dumps({"object_id": object_id,
+    
+    await postgres_notify("remove_datapoint", json.dumps({"object_id": object_id,
                                                          "topic": topic,
                                                          "jsonpath": jsonpath,
-                                                         "unsubscribe": unsubscribe is None}))
+                                                         "unsubscribe": unsubscribe is None}), conn)
     return None
 
 

@@ -20,6 +20,7 @@ class PostgresDB:
             )
             register_uuid()
             self.cursor = self.connection.cursor()
+            self.connection.autocommit = True  # Needed for LISTEN to work
             self.cursor.execute(
                 """CREATE TABLE IF NOT EXISTS devices (
                                 object_id VARCHAR(255) NOT NULL PRIMARY KEY,

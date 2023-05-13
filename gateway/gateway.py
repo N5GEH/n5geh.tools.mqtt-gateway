@@ -1,22 +1,20 @@
 """
-This module implements the IoT Agent MQTT Gateway.
+This module implements the MQTT IoT Gateway.
 """
 
 import json
-from threading import Thread
-from uuid import uuid4
-
 import paho.mqtt.client as mqtt
-import redis
 import requests
-from database import PostgresDB
-from filip.clients.mqtt import IoTAMQTTClient
+from adatabase import PostgresDB
 from filip.clients.ngsi_v2 import IoTAClient
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse
-from paho.mqtt.subscribeoptions import SubscribeOptions
+import asyncpg
+import asyncio
+from asyncio_mqtt import Client, MqttError, Topic
+import functools
 
 # Load configuration from JSON file
 config = json.load(open("config.json"))
@@ -29,48 +27,42 @@ servicepath = config["gateway_setup"]["fiware_servicepath"]
 header = FiwareHeader(service=service, service_path=servicepath)
 api_key = config["gateway_setup"]["api_key"]
 
-class MqttGateway(IoTAMQTTClient):
+host = config["postgres_setup"]["host"]
+user = config["postgres_setup"]["user"]
+password = config["postgres_setup"]["password"]
+database = config["postgres_setup"]["database"]
+
+DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
+
+class MqttGateway(Client):
+    """
+    This class implements the MQTT IoT Gateway.
+    This implementation is asynchronous and uses the MQTTv5 protocol.
+    The advantage of asynchronous programming is that it allows for multiple tasks to be executed concurrently.
+    In comparison to multithreading or multiprocessing, asynchronous programming is more lightweight and thus
+    more efficient. This is especially important for IoT applications, where the gateway is often a small device
+    with limited resources. While asynchronous programming is more difficult to implement, I believe that it is worth the effort.
+    The disadvantage of asynchronous programming is that it is more difficult to debug and it is not as efficient for CPU-bound tasks (which is not the case here).
+    """
     def __init__(self):
-        super().__init__(client_id="gateway", protocol=mqtt.MQTTv5)
-
-        self.connect(host=mqtt_broker_address)
-
+        super().__init__(hostname=mqtt_broker_address, client_id="gateway", protocol=mqtt.MQTTv5)
         self.s = requests.Session()
-        self.iota_client = IoTAClient(url=iota_4041, session=self.s, fiware_header=header)
-        self.database = PostgresDB()
-
-        # Setting up Redis pubsub for adding and removing datapoints
-        self.redis_client = redis.Redis(
-            host=config["connection_settings"]["server_ip"], port=6379, db=0
-        )
-        self.pubsub = self.redis_client.pubsub()
-        self.pubsub.subscribe("add_datapoint")
-        self.pubsub.subscribe("remove_datapoint")
-
         # Create gateway device
         self.gateway_device = Device(
             device_id="gateway:001",
             entity_name="ngsi-ld:urn:Gateway:001",
             entity_type="Gateway",
             protocol="IoTA-JSON",
-        )
-        
-        initial_topics = []
-        # Subscribe to all topics from the database
-        for object_id, jsonpath, topic in self.database.get_all_datapoints():
-            self.add_datapoint(
-                object_id=object_id, 
-                jsonpath=jsonpath, 
-                topic=topic, 
-                subscribe=True if topic not in initial_topics else False
-            )
-            initial_topics.append(topic) if topic not in initial_topics else None
+        )        
+        self.iota_client = IoTAClient(url=iota_4041, session=self.s, fiware_header=header)
+        self.database = PostgresDB()
         try:
             self.iota_client.post_device(device=self.gateway_device, update=False)
         except requests.exceptions.HTTPError as e:
             print(f"Gateway device already exists: {e}")
 
-    def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool) -> None:
+            
+    async def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool, client: Client) -> None:
         """
         Adds a new datapoint to the gateway.
 
@@ -78,20 +70,18 @@ class MqttGateway(IoTAMQTTClient):
             object_id (str): The object ID of the datapoint.
             topic (str): The topic to which the datapoint should be added.
             attribute (str): The attribute associated with the datapoint.
-
-        Returns:
-            str: The UUID of the created datapoint.
+            subscribe (bool): Whether the gateway should subscribe to the topic.
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
         print(
             f"Adding datapoint {object_id} with jsonpath {jsonpath} and topic {topic} to the gateway"
         )
-        self.gateway_device.add_attribute(
-            DeviceAttribute(object_id=object_id, name=object_id)
-        )
-        self.gateway_subscribe(topic=topic) if subscribe else None
+        await client.subscribe(topic) if subscribe else None
+        # FiLiP is not async, use session instead? 
+        self.gateway_device.add_attribute(DeviceAttribute(name=object_id, object_id=object_id))
         self.iota_client.update_device(device=self.gateway_device)
 
-    def remove_datapoint(self, object_id: str, jsonpath: str, topic: str, unsubscribe: bool) -> None:
+    async def remove_datapoint(self, object_id: str, jsonpath: str, topic: str, unsubscribe: bool, client: Client) -> None:
         """
         Removes a datapoint from the gateway.
 
@@ -103,122 +93,122 @@ class MqttGateway(IoTAMQTTClient):
         print(
             f"Removing datapoint with jsonpath {jsonpath} and topic {topic} from the gateway"
         )
-        self.gateway_device.delete_attribute(DeviceAttribute(object_id=object_id, name=object_id))
-        self.gateway_unsubscribe(topic=topic) if unsubscribe else None
+        await client.unsubscribe(topic) if unsubscribe else None
+        # FiLiP is not async, use session instead?
+        self.gateway_device.delete_attribute(DeviceAttribute(name=object_id, object_id=object_id))
         self.iota_client.update_device(device=self.gateway_device)
 
-    def on_message(self, client: mqtt.Client, userdata, message: mqtt.MQTTMessage):
+    async def on_message(self, topic: Topic, payload: str) -> None:
         """
-        Callback function that processes incoming MQTT messages.
-
+        Callback function that processes MQTT messages. 
+        It is called whenever a message is received on a subscribed topic.
+        Queries the database for the datapoint associated with the topic containing the jsonpath of the attribute.
+        If a datapoint is found, the jsonpath is used to extract the value from the payload, which is then sent to the IoT Agent / Orion Context Broker.
+        
         Args:
-            client (mqtt.Client): The MQTT client instance.
-            userdata: User-defined data passed to the callback.
-            message (mqtt.MQTTMessage): The received MQTT message.
+            topic (Topic): The topic on which the message was received. The Topic object is from the asyncio_mqtt library.
+            payload (str): The payload of the message.
         """
-        print(f"Received message on topic '{message.topic}'")
-        datapoints = self.database.get_datapoint(topic=message.topic)
+        print(f"Received message on topic '{topic}'")
+        async with PostgresDB() as database:
+            datapoints = await database.get_datapoint(topic=str(topic))
         if not datapoints:
-            print(f"No datapoint found for topic {message.topic}")
+            print(f"No datapoint found for topic {topic}")
             return
         for datapoint in datapoints:
             object_id, jsonpath = datapoint
-            data = parse(jsonpath).find(json.loads(message.payload))
+            data = parse(jsonpath).find(json.loads(payload))
             if data:
                 print(f"I will be sending <{object_id}: {data[0].value}> to the IoT Agent")
-                #request = self.s.post(
-                #    f"{iota_7896}/iot/json?k={api_key}&i={object_id}",
-                #    headers={"Content-Type": "application/json"},
-                #    data=json.dumps({object_id: data[0].value}),
-                #)
-                #print(request.text)
 
-    def update_gateway(self, topic: str, payload: str):
+    async def mqtt_listener(self, client: Client) -> None:
         """
-        Updates the gateway based on the given topic and payload.
+        Listens to MQTT for new messages on subscribed topics. When a message is received, the on_message callback function is called.
+        Also subscribes to all topics in the database on startup.
+        The callback function is called asynchronously, which means that the listener can continue to listen for new messages while the callback function is being executed.
+        This is important because the callback function can take a long time to execute, for example if it needs to query the database.
 
         Args:
-            topic (str): The topic associated with the update.
-            payload (str): The payload containing the update information.
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
-        device = self.database.get_device_by_topic(topic)
-        if device:
-            print(f"Updating device {device.id}")
-            update_gateway = self.s.post(
-                f"{iota_7896}/iot/d?k={device.device_id}&i={device.entity_name}",
-                data=payload,
-                headers=header,
-            )
-            print(update_gateway.text)
+        async with PostgresDB() as database:
+            for topic in await database.get_all_unique_topics():
+                print(f"Subscribing to topic {topic}")
+                real_topic = str(topic).split("'")[1]  # for some reason the topic is returned as <Record topic='topic'>, any way to avoid this?
+                await client.subscribe(real_topic)
+                print(f"Subscribed to topic {real_topic}")
+            async with client.messages() as messages:
+                async for message in messages:
+                    payload = message.payload.decode()
+                    topic = message.topic
+                    await self.on_message(topic=topic, payload=payload)
+    
+    async def postgres_listener(self, client):
+        """
+        Listens to PostgreSQL for new topics to subscribe or unsubscribe to. 
+        When a new topic is added or removed from the database, the on_postgres_notification callback function is called.
+        The callback function is called asynchronously, which means that the listener can continue to listen for new topics while the callback function is being executed.
+        This is important because the callback function can take a long time to execute, for example if it needs to query the database.
+        The functools.partial function is used to pass the MQTT client to the callback function, which has a different signature than the callback function expected by the asyncpg library.
+        
+        Args:
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+        """
+        conn = await asyncpg.connect(DATABASE_URL)
+        on_postgres_notification_with_client = functools.partial(self.on_postgres_notification, client=client)  # pass the MQTT client to the callback function
+        await conn.add_listener("add_datapoint", on_postgres_notification_with_client)
+        await conn.add_listener("remove_datapoint", on_postgres_notification_with_client)
+        
+        while True:
+            await asyncio.sleep(1)  # keeps the connection alive
+        
+    async def on_postgres_notification(self, conn: asyncpg.Connection, pid: int, channel: str, payload: str, client: Client) -> None:
+        """
+        Callback function that processes PostgreSQL notifications.
+        It is called whenever a new topic is added or removed from the database.
+        
+        Args:
+            conn (asyncpg.Connection): The connection to the database.
+            pid (int): The process ID of the PostgreSQL server process that sent the notification. I shall probably not use this but the signature of the callback function requires it.
+            channel (str): The name of the channel that the notification was sent on.
+            payload (str): The payload of the notification.
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+        """
+        print(f"Received notification on channel '{channel}' with payload '{payload}'")
+        if channel == "add_datapoint":
+            data = json.loads(payload)
+            await self.add_datapoint(object_id=data["object_id"], 
+                                        jsonpath=data["jsonpath"], 
+                                        topic=data["topic"], 
+                                        subscribe=data["subscribe"],
+                                        client=client)
+        elif channel == "remove_datapoint":
+            data = json.loads(payload)
+            await self.remove_datapoint(object_id=data["object_id"], 
+                                        jsonpath=data["jsonpath"], 
+                                        topic=data["topic"], 
+                                        unsubscribe=data["unsubscribe"],
+                                        client=client)
         else:
-            print(f"Device not found for topic {topic}")
-
-    def gateway_subscribe(self, topic: str):
+            print(f"Received notification on unknown channel '{channel}'")
+                
+    async def run(self):
         """
-        Subscribes the gateway to a given topic.
-
-        Args:
-            topic (str): The topic to subscribe to.
+        Starts the gateway and runs the main loop. Simultaneously listens to PostgreSQL for new topics to subscribe or unsubscribe to.
+        In case of a connection error, the gateway will try to reconnect after 5 seconds and will continue to do so until a connection is established.
         """
-        print(f"Subscribing to topic {topic}")
-        self.subscribe(topic=(topic, SubscribeOptions(qos=0)))
-
-    def gateway_unsubscribe(self, topic: str):
-        """
-        Unsubscribes the gateway from a given topic.
-
-        Args:
-            topic (str): The topic to unsubscribe from.
-        """
-        print(f"Unsubscribing from topic {topic}")
-        self.unsubscribe(topic=topic)
-
-    def clean_up(self):
-        """
-        Cleans up the gateway by clearing the IoT agent and context broker.
-        """
-        clear_iot_agent(url=iota_4041, fiware_header=FiwareHeader(service, servicepath))
-        clear_context_broker(
-            url=orion, fiware_header=FiwareHeader(service, servicepath)
-        )
-
-    def redis_listener(self):
-        """
-        Listens to Redis for new topics to subscribe or unsubscribe to.
-        """
-        for message in self.pubsub.listen():
-            if message['type'] == 'message':
-                if message['channel'] == b'add_datapoint':
-                    data = json.loads(message['data'].decode('utf-8'))
-                    print(data)
-                    self.add_datapoint(
-                        object_id=data['object_id'],
-                        jsonpath=data['jsonpath'],
-                        topic=data['topic'],
-                        subscribe=data['subscribe']
-                    )
-                if message['channel'] == b'remove_datapoint':
-                    data = json.loads(message['data'].decode('utf-8'))
-                    self.remove_datapoint(
-                        object_id=data['object_id'],
-                        topic=data['topic'],
-                        jsonpath=data['jsonpath'],
-                        unsubscribe=data['unsubscribe']
-                    )
-
-    def run(self):
-        """
-        Starts the gateway and runs the main loop.
-        Simultaneously listens to Redis for new topics to subscribe or unsubscribe to.
-        """
-        t1 = Thread(target=self.loop_forever)
-        t2 = Thread(target=self.redis_listener)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        while True:
+            reconnect_interval = 5
+            try:
+                async with Client(hostname=mqtt_broker_address, client_id="gateway", protocol=mqtt.MQTTv5) as client:
+                    tasks = [self.mqtt_listener(client), self.postgres_listener(client)]
+                    await asyncio.gather(*tasks)
+            except MqttError as error:
+                print(f"MQTT error: {error} - reconnecting in {reconnect_interval} seconds")
+                await asyncio.sleep(reconnect_interval)
+            
 
 if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
     gateway = MqttGateway()
-    gateway.run()
-           
+    asyncio.run(gateway.run())
