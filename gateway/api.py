@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -27,8 +28,15 @@ class Datapoint(BaseModel):
     object_id: str
     jsonpath: str
     topic: str
-    
-    
+    entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
+    attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] =''
+    matchDatapoint: Optional[bool] = False
+  
+class DatapointUpdate(BaseModel):
+    entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
+    attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] =''
 # Database connection settings
 DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
 
@@ -50,7 +58,7 @@ async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
     
 @app.get("/data", response_model=List[Datapoint])
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
-    rows = await conn.fetch("SELECT object_id, jsonpath, topic FROM devices")
+    rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, attribute_name, description FROM devices")
     return rows
 
 @app.get("/data/{object_id}", response_model=Datapoint)
@@ -65,6 +73,8 @@ async def get_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_c
 
 @app.post("/data", response_model=Datapoint, status_code=201)
 async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)):
+    if datapoint.matchDatapoint and (datapoint.entity_id is None or datapoint.attribute_name is None):
+        raise HTTPException(status_code=400, detail="entity_id and attribute_name must be set if Match Datapoint is enabled!")
     try:
         # check if there is already a device subscribed to the same topic
         # if so, the gateway will not subscribe to the topic again
@@ -73,8 +83,10 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             datapoint.topic, datapoint.object_id
         )
         await conn.execute(
-            """INSERT INTO devices (object_id, jsonpath, topic) VALUES ($1, $2, $3)""",
-            datapoint.object_id, datapoint.jsonpath, datapoint.topic
+            """INSERT INTO devices (object_id, jsonpath, topic, entity_id, attribute_name, description) 
+            VALUES ($1, $2, $3, $4, $5, $6)""",
+            datapoint.object_id, datapoint.jsonpath, datapoint.topic,
+            datapoint.entity_id, datapoint.attribute_name, datapoint.description
         )
         await postgres_notify("add_datapoint", json.dumps({"object_id": datapoint.object_id,
                                                             "jsonpath": datapoint.jsonpath,
@@ -84,6 +96,14 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
     
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Device already exists!")
+
+@app.put("/data/{object_id}", response_model=Datapoint)
+async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asyncpg.Connection = Depends(get_connection)):
+    await conn.execute(
+        """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
+        datapoint.entity_id, datapoint.attribute_name, datapoint.description, object_id
+    )
+    return await get_datapoint(object_id, conn)
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):

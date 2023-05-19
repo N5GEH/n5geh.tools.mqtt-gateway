@@ -19,7 +19,11 @@ class PostgresDB:
                 """CREATE TABLE IF NOT EXISTS devices (
                                 object_id VARCHAR(255) NOT NULL PRIMARY KEY,
                                 jsonpath VARCHAR(255) NOT NULL,
-                                topic VARCHAR(255) NOT NULL
+                                topic VARCHAR(255) NOT NULL,
+                                entity_id VARCHAR(255),
+                                attribute_name VARCHAR(255),
+                                description VARCHAR(255),
+                                matched BOOLEAN NOT NULL DEFAULT FALSE
 )
 """
             )
@@ -98,12 +102,37 @@ class PostgresDB:
         await self.pool.close() if self.pool else None
 
     async def __aenter__(self):
+        """
+        The aenter method is called when the `async with` statement is used. It stands for asynchronous enter.
+        As the name suggests, it is called when entering the `async with` statement.
+        """
         await self.init()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        The aexit method is called when the `async with` statement is used. It stands for asynchronous exit.
+        As the name suggests, it is called when exiting the `async with` statement.
+        
+        Args (for future reference if needed):
+            exc_type: The exception type.
+            exc_val: The exception value.
+            exc_tb: The exception traceback.
+            
+        """
         await self.close()
 
+async def init_database():
+    database = PostgresDB()
+    await database.init()
+    return database
+
+async def nuke_database():
+    database = PostgresDB()
+    await database.init()
+    await database.nuke_table()
+    await database.close()
 
 if __name__ == "__main__":
-    database = PostgresDB()
+    asyncio.run(nuke_database())
+    asyncio.run(init_database())
