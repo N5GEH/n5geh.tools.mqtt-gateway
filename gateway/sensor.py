@@ -54,11 +54,11 @@ class Lorawan(Client):
             "f_cnt": 243,
             "frm_payload": "AQDDAikEAEwFAAcN3REA",
             "decoded_payload": {
-                "humidity": 41,
+                "humidity": 42,
                 "light": 76,
                 "motion": 0,
                 "occupancy": 0,
-                "temperature": 19.5,
+                "temperature": 20.5,
                 "vdd": 3549,
             },
             "rx_metadata": [

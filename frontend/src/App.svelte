@@ -1,6 +1,5 @@
 <script>
   import { onMount } from 'svelte';
-  import Datapoint from './Datapoint.svelte';
 
   let data = [];
   let newObjectId = '';
@@ -134,7 +133,7 @@ function cancelEditing(datapoint) {
             <button on:click={cancelEditing}>Cancel</button>
           {:else}
             <!-- same reason as above -->
-            <button on:click={() => editData(row)}>Update</button>
+            <button on:click={() => editData(row)}>Match</button>
             <button on:click={() => deleteData(row.object_id)}>Delete</button>
           {/if}
       </tr>
@@ -148,8 +147,10 @@ function cancelEditing(datapoint) {
   <input type="text" id="topic" bind:value={newTopic} required />
   <label for="description">Description</label>
   <input type="text" id="description" bind:value={newDescription}/>
-  <label for="matchDatapoint">Match Datapoint</label>
-  <input type="checkbox" id="matchDatapoint" bind:checked={matchDatapoint} />
+  <div class="matchDatapoint">
+    <label for="matchDatapoint">Match Datapoint</label>
+    <input type="checkbox" id="matchDatapoint" bind:checked={matchDatapoint} />
+  </div>
   {#if matchDatapoint}
     <label for="entity_id">Entity ID</label>
     <input type="text" id="entity_id" bind:value={newEntityId} required />
@@ -186,6 +187,8 @@ function cancelEditing(datapoint) {
   table > tbody > tr > td > button {
     cursor: pointer;
     background-color: #E62332;
+    width: 100%;
+    margin: 0.25em 0 0.25em 0;
   }
 
   form {
@@ -217,5 +220,11 @@ function cancelEditing(datapoint) {
     align-items: flex-end;
   }
 
+  .matchDatapoint {
+    font-weight: bold;
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+  }
 </style>
 

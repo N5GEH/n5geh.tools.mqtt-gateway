@@ -5,9 +5,10 @@ This module implements the MQTT IoT Gateway.
 import json
 import paho.mqtt.client as mqtt
 import requests
-from gateway.database import PostgresDB
-from filip.clients.ngsi_v2 import IoTAClient
+from database import PostgresDB
 from filip.models.base import FiwareHeader
+from filip.models.ngsi_v2.context import ContextAttribute
+from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse
@@ -54,7 +55,8 @@ class MqttGateway(Client):
             entity_type="Gateway",
             protocol="IoTA-JSON",
         )        
-        self.iota_client = IoTAClient(url=iota_4041, session=self.s, fiware_header=header)
+        self.orion = ContextBrokerClient(url=orion, headers=header)
+        self.iota_client = IoTAClient(url=iota_4041, headers=header)
         self.database = PostgresDB()
         try:
             self.iota_client.post_device(device=self.gateway_device, update=False)
@@ -112,14 +114,23 @@ class MqttGateway(Client):
         print(f"Received message on topic '{topic}'")
         async with PostgresDB() as database:
             datapoints = await database.get_datapoint(topic=str(topic))
-        if not datapoints:
-            print(f"No datapoint found for topic {topic}")
-            return
-        for datapoint in datapoints:
-            object_id, jsonpath = datapoint
-            data = parse(jsonpath).find(json.loads(payload))
-            if data:
-                print(f"I will be sending <{object_id}: {data[0].value}> to the IoT Agent")
+            if not datapoints:
+                print(f"No datapoint found for topic {topic}")
+                return
+            for datapoint in datapoints:
+                object_id, jsonpath = datapoint
+                entity_id, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
+                data = parse(jsonpath).find(json.loads(payload))
+                if data and entity_id and attribute_name:
+                    attr_data = {"type": "Float", "value": data[0].value}
+                    print(f"I will be sending <{attribute_name}: {data[0].value}> to the Context Broker")
+                    self.orion.update_entity_attribute(
+                        entity_id=entity_id,
+                        attr=ContextAttribute(**attr_data),
+                        attr_name=attribute_name
+                    )
+                else:
+                    print(f"No data found for jsonpath {jsonpath} in payload {payload}")
 
     async def mqtt_listener(self, client: Client) -> None:
         """

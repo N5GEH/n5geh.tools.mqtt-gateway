@@ -35,6 +35,14 @@ class PostgresDB:
                 jsonpath, topic,
             )
             return row["object_id"] if row else None
+        
+    async def get_mapping(self, jsonpath, topic):
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """SELECT entity_id, attribute_name FROM devices WHERE jsonpath=$1 AND topic=$2""",
+                jsonpath, topic,
+            )
+            return (row["entity_id"], row["attribute_name"]) if row else None
 
     async def get_all_datapoints(self):
         async with self.pool.acquire() as conn:
@@ -122,17 +130,12 @@ class PostgresDB:
         """
         await self.close()
 
-async def init_database():
-    database = PostgresDB()
-    await database.init()
-    return database
-
-async def nuke_database():
-    database = PostgresDB()
-    await database.init()
-    await database.nuke_table()
-    await database.close()
+async def get_all_datapoints():
+    async with PostgresDB() as db:
+        return await db.get_all_datapoints()
 
 if __name__ == "__main__":
-    asyncio.run(nuke_database())
-    asyncio.run(init_database())
+    loop = asyncio.get_event_loop()
+    x = loop.run_until_complete(get_all_datapoints())
+    print(x)
+    loop.close()
