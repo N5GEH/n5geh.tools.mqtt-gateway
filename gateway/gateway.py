@@ -8,7 +8,7 @@ import requests
 from database import PostgresDB
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.context import ContextAttribute
-from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
+from filip.clients.ngsi_v2 import ContextBrokerClient
 from filip.models.ngsi_v2.iot import Device, DeviceAttribute
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse
@@ -56,13 +56,7 @@ class MqttGateway(Client):
             protocol="IoTA-JSON",
         )        
         self.orion = ContextBrokerClient(url=orion, headers=header)
-        self.iota_client = IoTAClient(url=iota_4041, headers=header)
         self.database = PostgresDB()
-        try:
-            self.iota_client.post_device(device=self.gateway_device, update=False)
-        except requests.exceptions.HTTPError as e:
-            print(f"Gateway device already exists: {e}")
-
             
     async def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool, client: Client) -> None:
         """
@@ -79,9 +73,6 @@ class MqttGateway(Client):
             f"Adding datapoint {object_id} with jsonpath {jsonpath} and topic {topic} to the gateway"
         )
         await client.subscribe(topic) if subscribe else None
-        # FiLiP is not async, use session instead? 
-        self.gateway_device.add_attribute(DeviceAttribute(name=object_id, object_id=object_id))
-        self.iota_client.update_device(device=self.gateway_device)
 
     async def remove_datapoint(self, object_id: str, jsonpath: str, topic: str, unsubscribe: bool, client: Client) -> None:
         """
@@ -96,9 +87,6 @@ class MqttGateway(Client):
             f"Removing datapoint with jsonpath {jsonpath} and topic {topic} from the gateway"
         )
         await client.unsubscribe(topic) if unsubscribe else None
-        # FiLiP is not async, use session instead?
-        self.gateway_device.delete_attribute(DeviceAttribute(name=object_id, object_id=object_id))
-        self.iota_client.update_device(device=self.gateway_device)
 
     async def on_message(self, topic: Topic, payload: str) -> None:
         """
@@ -122,13 +110,16 @@ class MqttGateway(Client):
                 entity_id, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
                 data = parse(jsonpath).find(json.loads(payload))
                 if data and entity_id and attribute_name:
-                    attr_data = {"type": "Float", "value": data[0].value}
+                    attr_data = {"type": "Float", "value": data[0].value}  # Hardcoded type for now, change later?
                     print(f"I will be sending <{attribute_name}: {data[0].value}> to the Context Broker")
-                    self.orion.update_entity_attribute(
-                        entity_id=entity_id,
-                        attr=ContextAttribute(**attr_data),
-                        attr_name=attribute_name
-                    )
+                    try:
+                        self.orion.update_entity_attribute(
+                            entity_id=entity_id,
+                            attr=ContextAttribute(**attr_data),
+                            attr_name=attribute_name
+                        )
+                    except requests.exceptions.HTTPError as e:
+                        print(f"Error while sending data to the Context Broker: {e}")
                 else:
                     print(f"No data found for jsonpath {jsonpath} in payload {payload}")
 

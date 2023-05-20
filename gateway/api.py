@@ -6,6 +6,7 @@ from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
+import requests
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -30,15 +31,17 @@ class Datapoint(BaseModel):
     topic: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] =''
+    description: Optional[str] = ''
     matchDatapoint: Optional[bool] = False
   
 class DatapointUpdate(BaseModel):
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] =''
+    description: Optional[str] = ''
+    
 # Database connection settings
 DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
+ORION_URL = f"http://{host}:1026/v2/entities"
 
 @app.on_event("startup")
 async def startup():
@@ -55,7 +58,16 @@ async def get_connection():
 async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
     print(f"Sending notification to channel {channel} with payload {payload}")
     await conn.execute(f"NOTIFY {channel}, '{payload}'")
-    
+
+def validate_attribute(entity_id: str, attribute_name: str) -> bool:
+    """Validate if the attribute exists in the entity."""
+    r = requests.get(f"{ORION_URL}/{entity_id}")
+    if r.status_code == 200:
+        entity = r.json()
+        if attribute_name in entity:
+            return True
+    return False
+
 @app.get("/data", response_model=List[Datapoint])
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
     rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, attribute_name, description FROM devices")
@@ -82,6 +94,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
             datapoint.topic, datapoint.object_id
         )
+        status = validate_attribute(datapoint.entity_id, datapoint.attribute_name)        
         await conn.execute(
             """INSERT INTO devices (object_id, jsonpath, topic, entity_id, attribute_name, description) 
             VALUES ($1, $2, $3, $4, $5, $6)""",
@@ -92,7 +105,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
                                                             "jsonpath": datapoint.jsonpath,
                                                             "topic": datapoint.topic,
                                                             "subscribe": subscribe is None}), conn)
-        return datapoint
+        return {**datapoint.dict(), "subscribe": subscribe is None, "status": "Valid" if status else "Invalid"}
     
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Device already exists!")
@@ -103,7 +116,8 @@ async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asy
         """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
         datapoint.entity_id, datapoint.attribute_name, datapoint.description, object_id
     )
-    return await get_datapoint(object_id, conn)
+    status = validate_attribute(datapoint.entity_id, datapoint.attribute_name)
+    return {**datapoint.dict(), "status": "Valid" if status else "Invalid"}
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
