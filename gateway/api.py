@@ -110,7 +110,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Device already exists!")
 
-@app.put("/data/{object_id}", response_model=Datapoint)
+@app.put("/data/{object_id}", response_model=DatapointUpdate)
 async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asyncpg.Connection = Depends(get_connection)):
     await conn.execute(
         """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",

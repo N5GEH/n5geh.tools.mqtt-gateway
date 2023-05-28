@@ -16,6 +16,7 @@ import asyncpg
 import asyncio
 from asyncio_mqtt import Client, MqttError, Topic
 import functools
+import time
 
 # Load configuration from JSON file
 config = json.load(open("config.json"))
@@ -93,7 +94,7 @@ class MqttGateway(Client):
         Callback function that processes MQTT messages. 
         It is called whenever a message is received on a subscribed topic.
         Queries the database for the datapoint associated with the topic containing the jsonpath of the attribute.
-        If a datapoint is found, the jsonpath is used to extract the value from the payload, which is then sent to the IoT Agent / Orion Context Broker.
+        If a datapoint is found, the jsonpath is used to extract the value from the payload, which is then sent to the Orion Context Broker.
         
         Args:
             topic (Topic): The topic on which the message was received. The Topic object is from the asyncio_mqtt library.
@@ -101,16 +102,18 @@ class MqttGateway(Client):
         """
         print(f"Received message on topic '{topic}'")
         async with PostgresDB() as database:
+            start_time = time.time()
             datapoints = await database.get_datapoint(topic=str(topic))
             if not datapoints:
                 print(f"No datapoint found for topic {topic}")
                 return
+            print(f"Got all datapoints in {time.time() - start_time}")
             for datapoint in datapoints:
                 object_id, jsonpath = datapoint
                 entity_id, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
                 data = parse(jsonpath).find(json.loads(payload))
                 if data and entity_id and attribute_name:
-                    attr_data = {"type": "Float", "value": data[0].value}  # Hardcoded type for now, change later?
+                    attr_data = {"value": data[0].value}  # Hardcoded type for now, change later?
                     print(f"I will be sending <{attribute_name}: {data[0].value}> to the Context Broker")
                     try:
                         self.orion.update_entity_attribute(
@@ -120,6 +123,8 @@ class MqttGateway(Client):
                         )
                     except requests.exceptions.HTTPError as e:
                         print(f"Error while sending data to the Context Broker: {e}")
+                    finally:
+                        print(f"Sent the data to Orion in {time.time() - start_time}")
                 else:
                     print(f"No data found for jsonpath {jsonpath} in payload {payload}")
 
