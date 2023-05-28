@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
 import requests
+import httpx
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -59,15 +60,6 @@ async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
     print(f"Sending notification to channel {channel} with payload {payload}")
     await conn.execute(f"NOTIFY {channel}, '{payload}'")
 
-def validate_attribute(entity_id: str, attribute_name: str) -> bool:
-    """Validate if the attribute exists in the entity."""
-    r = requests.get(f"{ORION_URL}/{entity_id}")
-    if r.status_code == 200:
-        entity = r.json()
-        if attribute_name in entity:
-            return True
-    return False
-
 @app.get("/data", response_model=List[Datapoint])
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
     rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, attribute_name, description FROM devices")
@@ -94,7 +86,6 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
             datapoint.topic, datapoint.object_id
         )
-        status = validate_attribute(datapoint.entity_id, datapoint.attribute_name)        
         await conn.execute(
             """INSERT INTO devices (object_id, jsonpath, topic, entity_id, attribute_name, description) 
             VALUES ($1, $2, $3, $4, $5, $6)""",
@@ -105,7 +96,7 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
                                                             "jsonpath": datapoint.jsonpath,
                                                             "topic": datapoint.topic,
                                                             "subscribe": subscribe is None}), conn)
-        return {**datapoint.dict(), "subscribe": subscribe is None, "status": "Valid" if status else "Invalid"}
+        return {**datapoint.dict(), "subscribe": subscribe is None}
     
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Device already exists!")
@@ -116,8 +107,7 @@ async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asy
         """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
         datapoint.entity_id, datapoint.attribute_name, datapoint.description, object_id
     )
-    status = validate_attribute(datapoint.entity_id, datapoint.attribute_name)
-    return {**datapoint.dict(), "status": "Valid" if status else "Invalid"}
+    return {**datapoint.dict()}
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
@@ -142,4 +132,15 @@ async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(ge
                                                          "unsubscribe": unsubscribe is None}), conn)
     return None
 
+@app.get("/data/{object_id}/status", response_model=bool)
+async def get_match_status(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
+    row = await conn.fetchrow(
+        """SELECT entity_id, attribute_name FROM devices WHERE object_id=$1""",
+        object_id
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Device not found!")
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{ORION_URL}/{row['entity_id']}/attrs/{row['attribute_name']}")
+        return response.status_code == 200
 
