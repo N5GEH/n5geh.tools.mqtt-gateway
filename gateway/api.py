@@ -46,27 +46,49 @@ ORION_URL = f"http://{host}:1026/v2/entities"
 
 @app.on_event("startup")
 async def startup():
+    """
+    Create a pool of connections to the database. The pool size is 10 connections.
+    What it is supposed to achieve is that the gateway can handle 10 concurrent requests (is this appropriate for our use case?)
+    """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
     
 @app.on_event("shutdown")
 async def shutdown():
+    """
+    Close the pool of connections to the database. This is to prevent the pool from being left open when the gateway is shut down.
+    """
     await app.state.pool.close()
     
 async def get_connection():
+    """
+    Get a connection from the pool of connections to the database. This is to ensure that the gateway does not have to create a new connection
+    to the database for every request. Instead, it can reuse an existing connection from the pool for efficiency.
+    """
     async with app.state.pool.acquire() as connection:
+        # async with is used to ensure that the connection is released back to the pool after the request is done
+        # a yield statement is used to return the connection to the caller
         yield connection
         
 async def postgres_notify(channel: str, payload: str, conn: asyncpg.Connection):
+    """
+    Send a notification to the database. This is to notify the database that a new datapoint has been added to the gateway.
+    """
     print(f"Sending notification to channel {channel} with payload {payload}")
     await conn.execute(f"NOTIFY {channel}, '{payload}'")
 
 @app.get("/data", response_model=List[Datapoint])
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Get all datapoints from the database. This is to allow the frontend to display all the registered datapoints in the database.
+    """
     rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, attribute_name, description FROM devices")
     return rows
 
 @app.get("/data/{object_id}", response_model=Datapoint)
 async def get_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Get a specific datapoint from the database.
+    """
     row = await conn.fetchrow(
         """SELECT * FROM devices WHERE object_id=$1""",
         object_id
@@ -77,6 +99,12 @@ async def get_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_c
 
 @app.post("/data", response_model=Datapoint, status_code=201)
 async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Add a new datapoint to the database. This is to allow to add new datapoints to the gateway.
+    In (a very unlikely) case where the datapoint was supposed to be match but the corresponding information is not provided, an error will be raised.
+    If the datapoint is successfully added, a notification will be sent to the database to notify the database that a new datapoint has been added as well as
+    whether the topic needs to be subscribed to.
+    """
     if datapoint.matchDatapoint and (datapoint.entity_id is None or datapoint.attribute_name is None):
         raise HTTPException(status_code=400, detail="entity_id and attribute_name must be set if Match Datapoint is enabled!")
     try:
@@ -103,6 +131,9 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
 
 @app.put("/data/{object_id}", response_model=DatapointUpdate)
 async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Update a specific datapoint in the database. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
+    """
     await conn.execute(
         """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
         datapoint.entity_id, datapoint.attribute_name, datapoint.description, object_id
@@ -111,6 +142,9 @@ async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asy
 
 @app.delete("/data/{object_id}", status_code=204)
 async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Delete a specific datapoint from the database. This is to allow the frontend to delete a datapoint from the gateway.
+    """
     topic, jsonpath = await conn.fetchrow(
         """SELECT topic, jsonpath FROM devices WHERE object_id=$1""",
         object_id
@@ -134,6 +168,9 @@ async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(ge
 
 @app.get("/data/{object_id}/status", response_model=bool)
 async def get_match_status(object_id: str, conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
+    """
     row = await conn.fetchrow(
         """SELECT entity_id, attribute_name FROM devices WHERE object_id=$1""",
         object_id
