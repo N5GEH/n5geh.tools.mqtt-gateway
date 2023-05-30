@@ -132,6 +132,7 @@ class PostgresDB:
 
 async def get_all_datapoints():
     async with PostgresDB() as db:
+        await db.init()
         return await db.get_all_datapoints()
 
 if __name__ == "__main__":

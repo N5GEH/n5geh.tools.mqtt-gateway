@@ -177,6 +177,7 @@ async def get_match_status(object_id: str, conn: asyncpg.Connection = Depends(ge
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
+    
     async with httpx.AsyncClient() as client:
         response = await client.get(f"{ORION_URL}/{row['entity_id']}/attrs/{row['attribute_name']}")
         return response.status_code == 200

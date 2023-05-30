@@ -187,5 +187,5 @@ class Lorawan(Client):
 
 
 if __name__ == "__main__":
-    sensor = Lorawan("lorawan", "test/iot", "temperature")
+    sensor = Lorawan("lorawan", "test/latency", "temperature")
     sensor.run()

@@ -104,6 +104,25 @@ async function getStatus(object_id) {
   return isOnline;
 }
 
+async function getOrionStatus() {
+  // Check if the Context Broker is online by fetching the version endpoint
+  try {
+    // TODO: resolve CORS issue
+    const response = await fetch(`http://localhost:1026/version`);
+
+    // Check if the response status is OK
+    if (!response.ok) {
+      console.error('HTTP error', response.status);
+      return false;
+    }
+
+    const isOnline = await response.json();
+    return isOnline;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    return false;
+  }
+}
 
 function editData(datapoint) {
   // This is called when the user clicks the edit button in the table
@@ -125,6 +144,11 @@ function cancelEditing(datapoint) {
 
 <body>
   <h1>IoT Gateway</h1>
+  <p>Context Broker Status: {#await getOrionStatus()}
+    <span>loading...</span>
+  {:then isOnline}
+    <span>{isOnline ? 'Online' : 'Offline'}</span>
+  {/await}</p>
 <div class="content">
 <table>
   <thead>
