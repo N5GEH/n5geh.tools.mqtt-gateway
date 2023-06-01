@@ -6,23 +6,22 @@ import matplotlib.pyplot as plt
 from statistics import mean, stdev
 from collections import defaultdict
 from random import uniform
-import requests
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from uvicorn import Config, Server
 from pydantic import BaseModel
 import httpx
 from typing import List
 from dateutil.parser import parse
-
+import asyncio_mqtt
 
 config = json.load(open("config.json"))
 mqtt_broker_address = config["connection_settings"]["server_ip"]
 orion_address = f"http://{config['connection_settings']['server_ip']}:1026"
 
 
-max_clients = 100
-initial_clients = 10
-client_step = 10
+max_clients = 10
+initial_clients = 1
+client_step = 1
 creation_interval = 15
 
 class Metadata(BaseModel):
@@ -41,6 +40,7 @@ class Entity(BaseModel):
     humidity: Attribute
     pressure: Attribute
     co2: Attribute
+    timestamp: Attribute
 
 class Notification(BaseModel):
     subscriptionId: str
@@ -63,14 +63,19 @@ async def generate_subscription() -> int:
             }
         ],
         "condition": {
-            "attrs": ["temperature", "humidity", "pressure", "co2"]
+            "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"]
         }
     },
     "notification": {
         "http": {
             "url": "http://host.docker.internal:8001/latency/notification"
         },
-        "attrs": ["temperature", "humidity", "pressure", "co2"],
+        #"mqtt": {
+        #    "url": "mqtt://host.docker.internal:1883",
+        #    "qos": 1,
+        #    "topic": "test/timestamp"
+        #},
+        "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"],
         "metadata": ["dateCreated", "dateModified"]
     },
     "expires": "2040-01-01T14:00:00.00Z"
@@ -79,13 +84,38 @@ async def generate_subscription() -> int:
         response = await client.post("http://localhost:1026/v2/subscriptions", json=subscription, headers={'Content-Type': 'application/json'})
         return response.status_code
 
+
+async def receive_mqtt_notification() -> None:
+    """
+    Receive the notification from the Orion Context Broker via MQTT and calculate the latency.
+    I will make use of the DateModified metadata field to calculate the latency. This field is automatically
+    added by the Orion Context Broker and contains the timestamp of the last update of the entity. We can then
+    calculate the latency by subtracting the timestamp attribute of the entity from the DateModified attribute.
+    """
+    async with asyncio_mqtt.Client("localhost") as client:
+        await client.subscribe("test/timestamp")
+        async with client.messages() as messages:
+            async for message in messages:
+                times = time.time()
+                payload = json.loads(message.payload)
+                print(payload)
+                payload_timestamp = float(payload["data"][0]["timestamp"]["value"])
+                date_modified = parse(payload["data"][0]["timestamp"]["metadata"]["dateModified"]["value"]).timestamp()
+                print(f"Payload timestamp: {payload_timestamp}")
+                print(f"Date modified: {date_modified}")
+                print(f"Time: {times}")
+                latency = (date_modified - payload_timestamp) * 1000
+                print(f"Latency: {latency:.3f} ms (MQTT)")
+                print("--------------------------------------------------")
+            
+
 async def start_server() -> None:
     """
     Start the FastAPI server that will receive the notifications from the Orion Context Broker.
     """
     app = FastAPI()
     @app.post("/latency/notification")
-    async def receive_notification(notification: Notification) -> dict:
+    async def receive_http_notification(notification: Notification) -> dict:
         """
         Receive a notification from the Orion Context Broker and calculate the latency.
         This function is called whenever a notification is received from the Orion Context Broker.
@@ -99,22 +129,17 @@ async def start_server() -> None:
             For structure, see the pydantic models above.
 
         Returns:
-            dict: _description_
+            dict: A dictionary containing the latency in seconds (perhaps change later)
         """
-        latest_attribute = max(
-            (attr for attr in [notification.data[0].temperature, notification.data[0].humidity, notification.data[0].pressure, notification.data[0].co2]),
-            key=lambda attr: parse(attr.metadata["dateModified"].value).timestamp(),
-        )
-        # Parse the timestamp from the payload
-        payload_timestamp = parse(latest_attribute.metadata["dateModified"].value).timestamp()
-
         # Get the current time
         current_timestamp = time.time()
+        payload_timestamp = float(notification.data[0].timestamp.value)
         
         # Calculate the latency
-        latency = current_timestamp - payload_timestamp
-        print(f"Latency: {latency:.3f} seconds")
+        latency = (current_timestamp - payload_timestamp) * 1000
+        print(f"Latency: {latency:.3f} ms (HTTP)")
         return {"latency": latency}
+        
     config = Config(app=app, host="0.0.0.0", port=8001)
     server = Server(config=config)
     await server.serve()
@@ -137,7 +162,7 @@ async def generate_payload() -> json:
     attributes = ["temperature", "humidity", "pressure", "co2"]
     real_attribute = attributes[int(uniform(0, len(attributes)))]
     fake_attribute = await generate_random_string(10)
-    return json.dumps({real_attribute: round(uniform(0, 100), 2), fake_attribute: round(uniform(0, 100), 2), "timestamp": time.time()})
+    return json.dumps({fake_attribute: round(uniform(0, 100), 2), "timestamp": time.time()})
     
 async def generate_client() -> None:
     """
@@ -191,7 +216,8 @@ async def main():
     try:
         server = asyncio.create_task(start_server())
         test_clients = asyncio.create_task(generate_clients(initial_clients, client_step, creation_interval))
-        await asyncio.gather(server, test_clients)
+        sub_listen = asyncio.create_task(receive_mqtt_notification())
+        await asyncio.gather(server, test_clients, sub_listen)
     except KeyboardInterrupt:
         print("Received exit signal. Shutting down...")
         for task in asyncio.all_tasks():
