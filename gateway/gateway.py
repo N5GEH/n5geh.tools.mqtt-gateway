@@ -100,33 +100,33 @@ class MqttGateway(Client):
             topic (Topic): The topic on which the message was received. The Topic object is from the asyncio_mqtt library.
             payload (str): The payload of the message.
         """
+        start_time = time.time()
         print(f"Received message on topic '{topic}'")
         async with PostgresDB() as database:
-            start_time = time.time()
             datapoints = await database.get_datapoint(topic=str(topic))
             if not datapoints:
                 print(f"No datapoint found for topic {topic}")
                 return
             print(f"Got all datapoints in {time.time() - start_time}")
+            attr_dict = {}
             for datapoint in datapoints:
                 object_id, jsonpath = datapoint
                 entity_id, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
                 data = parse(jsonpath).find(json.loads(payload))
                 if data and entity_id and attribute_name:
                     attr_data = {"value": data[0].value}  # Hardcoded type for now, change later?
-                    print(f"I will be sending <{attribute_name}: {data[0].value}> to the Context Broker")
-                    try:
-                        self.orion.update_entity_attribute(
-                            entity_id=entity_id,
-                            attr=ContextAttribute(**attr_data),
-                            attr_name=attribute_name
-                        )
-                    except requests.exceptions.HTTPError as e:
-                        print(f"Error while sending data to the Context Broker: {e}")
-                    finally:
-                        print(f"Sent the data to Orion in {time.time() - start_time}")
-                else:
-                    print(f"No data found for jsonpath {jsonpath} in payload {payload}")
+                    attr_dict[attribute_name] = ContextAttribute(**attr_data)
+            if attr_dict:
+                print(f"In the end, I will be sending the following data to the Context Broker: {attr_dict}")
+                try:
+                    self.orion.update_existing_entity_attributes(
+                        entity_id=entity_id,
+                        entity_type="Room",  # Hardcoded type for now, change later?
+                        attrs=attr_dict)
+                except requests.exceptions.HTTPError as e:
+                    print(f"Error while sending data to the Context Broker: {e}")
+                finally:
+                    print(f"Sent the data to Orion in {time.time() - start_time}")
 
     async def mqtt_listener(self, client: Client) -> None:
         """

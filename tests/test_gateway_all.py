@@ -19,9 +19,9 @@ mqtt_broker_address = config["connection_settings"]["server_ip"]
 orion_address = f"http://{config['connection_settings']['server_ip']}:1026"
 
 
-max_clients = 10
-initial_clients = 1
-client_step = 1
+max_clients = 1000
+initial_clients = 100
+client_step = 100
 creation_interval = 15
 
 class Metadata(BaseModel):

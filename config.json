@@ -1,0 +1,23 @@
+{
+    "connection_settings": {
+      "server_ip": "localhost",
+      "orion_port": 1026,
+      "mqtt_port": 1883,
+      "iota_port": 4041,
+      "redis_port": 6379,
+      "iota_http_port": 7896,
+      "ql_port": 8668,
+      "kafka_port": 9092
+    },
+    "gateway_setup": {
+      "fiware_service": "mqtt_gateway",
+      "fiware_servicepath": "/mqttgateway",
+      "api_key": "plugnplay"
+    },
+    "postgres_setup": {
+      "host": "127.0.0.1",
+      "user": "karelia",
+      "password": "postgres",
+      "database": "iot_devices"
+    }
+}
