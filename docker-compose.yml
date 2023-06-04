@@ -8,6 +8,8 @@ services:
       - 5173:5173
     networks:
       - bachelor_project
+    volumes:
+      - ./frontend:/app  # for hot reloading
   
   backend:
     build:
@@ -17,6 +19,8 @@ services:
       - 8000:8000
     networks:
       - bachelor_project
+    volumes:
+      - ./backend:/app  # for hot reloading
     environment:
       - ORION_URL=http://orion:1026
       - MQTT_HOST=mosquitto
