@@ -9,7 +9,7 @@ services:
     networks:
       - bachelor_project
     volumes:
-      - ./frontend:/app  # for hot reloading
+      - ./frontend:/dist  # for hot reloading
   
   backend:
     build:
