@@ -1,18 +1,18 @@
 import json
 import asyncio
 import asyncpg
+import os
 
 class PostgresDB:
     def __init__(self):
         self.pool = None
 
     async def init(self):
-        self.config = json.load(open("config.json"))
         self.pool = await asyncpg.create_pool(
-            host=self.config["postgres_setup"]["host"],
-            user=self.config["postgres_setup"]["user"],
-            password=self.config["postgres_setup"]["password"],
-            database=self.config["postgres_setup"]["database"],
+            host=os.environ.get("POSTGRES_HOST", "localhost"),
+            user=os.environ.get("POSTGRES_USER", "postgres"),
+            password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
+            database=os.environ.get("POSTGRES_DB", "postgres"),
         )
         async with self.pool.acquire() as conn:
             await conn.execute(

@@ -8,6 +8,7 @@ import json
 import asyncpg
 import requests
 import httpx
+import os
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -19,11 +20,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-config = json.load(open("config.json"))
-host = config["postgres_setup"]["host"]
-user = config["postgres_setup"]["user"]
-password = config["postgres_setup"]["password"]
-database = config["postgres_setup"]["database"]
+host = os.environ.get("POSTGRES_HOST", "localhost")
+user = os.environ.get("POSTGRES_USER", "postgres")
+password = os.environ.get("POSTGRES_PASSWORD", "postgres")
+database = os.environ.get("POSTGRES_DB", "postgres")
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -41,8 +41,8 @@ class DatapointUpdate(BaseModel):
     description: Optional[str] = ''
     
 # Database connection settings
-DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
-ORION_URL = f"http://{host}:1026/v2/entities"
+DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
+ORION_URL = os.environ.get("ORION_URL", "http://localhost:1026")
 
 @app.on_event("startup")
 async def startup():

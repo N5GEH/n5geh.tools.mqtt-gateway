@@ -17,24 +17,22 @@ import asyncio
 from asyncio_mqtt import Client, MqttError, Topic
 import functools
 import time
+import os
 
 # Load configuration from JSON file
-config = json.load(open("config.json"))
-mqtt_broker_address = config["connection_settings"]["server_ip"]
-orion = f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['orion_port']}"
-iota_7896 = f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_http_port']}"
-iota_4041 = f"http://{config['connection_settings']['server_ip']}:{config['connection_settings']['iota_port']}"
-service = config["gateway_setup"]["fiware_service"]
-servicepath = config["gateway_setup"]["fiware_servicepath"]
+MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
+orion = os.environ.get("ORION_URL", "http://localhost:1026")
+service = os.environ.get("FIWARE_SERVICE", "mqtt_gateway")
+servicepath = os.environ.get("FIWARE_SERVICEPATH", "/mqttgateway")
 header = FiwareHeader(service=service, service_path=servicepath)
-api_key = config["gateway_setup"]["api_key"]
+api_key = os.environ.get("API_KEY", "plugnplay")
 
-host = config["postgres_setup"]["host"]
-user = config["postgres_setup"]["user"]
-password = config["postgres_setup"]["password"]
-database = config["postgres_setup"]["database"]
+host = os.environ.get("POSTGRES_HOST", "localhost")
+user = os.environ.get("POSTGRES_USER", "postgres")
+password = os.environ.get("POSTGRES_PASSWORD", "postgres")
+database = os.environ.get("POSTGRES_DB", "postgres")
 
-DATABASE_URL = f"postgres://{user}:{password}@{host}:5432/{database}"
+DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 
 class MqttGateway(Client):
     """
@@ -47,7 +45,7 @@ class MqttGateway(Client):
     The disadvantage of asynchronous programming is that it is more difficult to debug and it is not as efficient for CPU-bound tasks (which is not the case here).
     """
     def __init__(self):
-        super().__init__(hostname=mqtt_broker_address, client_id="gateway", protocol=mqtt.MQTTv5)
+        super().__init__(hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5)
         self.s = requests.Session()
         # Create gateway device
         self.gateway_device = Device(
@@ -207,7 +205,7 @@ class MqttGateway(Client):
         while True:
             reconnect_interval = 5
             try:
-                async with Client(hostname=mqtt_broker_address, client_id="gateway", protocol=mqtt.MQTTv5) as client:
+                async with Client(hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5) as client:
                     tasks = [self.mqtt_listener(client), self.postgres_listener(client)]
                     await asyncio.gather(*tasks)
             except MqttError as error:
