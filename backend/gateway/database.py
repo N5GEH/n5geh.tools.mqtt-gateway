@@ -21,6 +21,7 @@ class PostgresDB:
                                 jsonpath VARCHAR(255) NOT NULL,
                                 topic VARCHAR(255) NOT NULL,
                                 entity_id VARCHAR(255),
+                                entity_type VARCHAR(255),
                                 attribute_name VARCHAR(255),
                                 description VARCHAR(255),
                                 matched BOOLEAN NOT NULL DEFAULT FALSE
@@ -39,10 +40,10 @@ class PostgresDB:
     async def get_mapping(self, jsonpath, topic):
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                """SELECT entity_id, attribute_name FROM devices WHERE jsonpath=$1 AND topic=$2""",
+                """SELECT entity_id, entity_type, attribute_name FROM devices WHERE jsonpath=$1 AND topic=$2""",
                 jsonpath, topic,
             )
-            return (row["entity_id"], row["attribute_name"]) if row else None
+            return (row["entity_id"], row["entity_type"], row["attribute_name"]) if row else None
 
     async def get_all_datapoints(self):
         async with self.pool.acquire() as conn:

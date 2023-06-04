@@ -31,12 +31,14 @@ class Datapoint(BaseModel):
     jsonpath: str
     topic: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
+    entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ''
     matchDatapoint: Optional[bool] = False
   
 class DatapointUpdate(BaseModel):
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
+    entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ''
     
@@ -81,7 +83,7 @@ async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
     """
     Get all datapoints from the database. This is to allow the frontend to display all the registered datapoints in the database.
     """
-    rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, attribute_name, description FROM devices")
+    rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description FROM devices")
     return rows
 
 @app.get("/data/{object_id}", response_model=Datapoint)
@@ -118,7 +120,8 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             """INSERT INTO devices (object_id, jsonpath, topic, entity_id, attribute_name, description) 
             VALUES ($1, $2, $3, $4, $5, $6)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic,
-            datapoint.entity_id, datapoint.attribute_name, datapoint.description
+            datapoint.entity_id, datapoint.entity_type, datapoint.attribute_name, 
+            datapoint.description
         )
         await postgres_notify("add_datapoint", json.dumps({"object_id": datapoint.object_id,
                                                             "jsonpath": datapoint.jsonpath,
@@ -136,7 +139,9 @@ async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asy
     """
     await conn.execute(
         """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
-        datapoint.entity_id, datapoint.attribute_name, datapoint.description, object_id
+        datapoint.entity_id, datapoint.entity_type,
+        datapoint.attribute_name, datapoint.description, 
+        object_id
     )
     return {**datapoint.dict()}
 

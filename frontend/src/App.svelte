@@ -16,6 +16,7 @@
   let newJsonPath = '';
   let newTopic = '';
   let newEntityId = '';
+  let newEntityType = '';
   let newAttributeName = '';
   let newDescription = '';
   let matchDatapoint = false;
@@ -53,6 +54,7 @@
         topic: newTopic,
         description : newDescription,
         entity_id: matchDatapoint ? newEntityId : null,
+        entity_type: matchDatapoint ? newEntityType : null,
         attribute_name: matchDatapoint ? newAttributeName : null,
         matchDatapoint
       }),
@@ -64,6 +66,7 @@
       newJsonPath = '';
       newTopic = '';
       newEntityId = '';
+      newEntityType = '';
       newAttributeName = '';
       newDescription = '';
       matchDatapoint = false;
@@ -76,7 +79,7 @@
     const response = await fetch(`http://localhost:8000/data/${datapoint.object_id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entity_id: datapoint.entity_id, attribute_name: datapoint.attribute_name, description: datapoint.description }),
+      body: JSON.stringify({ entity_id: datapoint.entity_id, entity_type: datapoint.entity_type, attribute_name: datapoint.attribute_name, description: datapoint.description }),
     });
     if (response.ok) {
       currentlyEditing = null;
@@ -131,7 +134,7 @@ function editData(datapoint) {
   tempData = { ...datapoint };
 }
 
-function cancelEditing(datapoint) {
+function cancelEditing() {
   // This is called when the user clicks the cancel button after editing a datapoint in the table
   // It resets the currentlyEditing variable and the tempData variable and cancels the edit
   currentlyEditing = null;
@@ -158,6 +161,7 @@ function cancelEditing(datapoint) {
       <th>Topic</th>
       <th>Description</th>
       <th>Entity ID</th>
+      <th>Entity Type</th>
       <th>Attribute Name</th>
       <th>Status</th>
     </tr>
@@ -183,6 +187,13 @@ function cancelEditing(datapoint) {
             <input bind:value={tempData.entity_id} />
           {:else}
             {row.entity_id || ''}
+          {/if}
+        </td>
+        <td>
+          {#if currentlyEditing === row.object_id}
+            <input bind:value={tempData.entity_type} />
+          {:else}
+            {row.entity_type || ''}
           {/if}
         </td>
         <td>

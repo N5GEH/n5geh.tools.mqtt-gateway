@@ -18,6 +18,7 @@ from asyncio_mqtt import Client, MqttError, Topic
 import functools
 import time
 import os
+from cachetools import LFUCache
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
@@ -55,7 +56,7 @@ class MqttGateway(Client):
             protocol="IoTA-JSON",
         )        
         self.orion = ContextBrokerClient(url=orion, headers=header)
-        self.database = PostgresDB()
+        self.cache = LFUCache(maxsize=1000)  # Least Frequently Used Cache (least recently used items are discarded first)
             
     async def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool, client: Client) -> None:
         """
@@ -100,26 +101,31 @@ class MqttGateway(Client):
         """
         start_time = time.time()
         print(f"Received message on topic '{topic}'")
-        async with PostgresDB() as database:
-            datapoints = await database.get_datapoint(topic=str(topic))
-            if not datapoints:
-                print(f"No datapoint found for topic {topic}")
-                return
+        if topic in self.cache:
+            print("Found topic in cache")
+            datapoints = self.cache[topic]
+        else:
+            async with PostgresDB() as database:
+                datapoints = await database.get_datapoint(topic=str(topic))
+                self.cache[topic] = datapoints
+                if not datapoints:
+                    print(f"No datapoint found for topic {topic}")
+                    return
             print(f"Got all datapoints in {time.time() - start_time}")
             attr_dict = {}
             for datapoint in datapoints:
                 object_id, jsonpath = datapoint
-                entity_id, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
+                entity_id, entity_type, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
                 data = parse(jsonpath).find(json.loads(payload))
                 if data and entity_id and attribute_name:
-                    attr_data = {"value": data[0].value}  # Hardcoded type for now, change later?
+                    attr_data = {"value": data[0].value}  # type automatically changed to Text, change later?
                     attr_dict[attribute_name] = ContextAttribute(**attr_data)
             if attr_dict:
                 print(f"In the end, I will be sending the following data to the Context Broker: {attr_dict}")
                 try:
                     self.orion.update_existing_entity_attributes(
                         entity_id=entity_id,
-                        entity_type="Room",  # Hardcoded type for now, change later?
+                        entity_type=entity_type,  
                         attrs=attr_dict)
                 except requests.exceptions.HTTPError as e:
                     print(f"Error while sending data to the Context Broker: {e}")
