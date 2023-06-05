@@ -6,7 +6,7 @@ from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncpg
-import requests
+import aioredis
 import httpx
 import os
 
@@ -45,6 +45,7 @@ class DatapointUpdate(BaseModel):
 # Database connection settings
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 ORION_URL = os.environ.get("ORION_URL", "http://localhost:1026")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 @app.on_event("startup")
 async def startup():
@@ -53,6 +54,7 @@ async def startup():
     What it is supposed to achieve is that the gateway can handle 10 concurrent requests (is this appropriate for our use case?)
     """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
+    app.state.redis = await aioredis.create_redis_pool(REDIS_URL)
     
 @app.on_event("shutdown")
 async def shutdown():
@@ -60,6 +62,7 @@ async def shutdown():
     Close the pool of connections to the database. This is to prevent the pool from being left open when the gateway is shut down.
     """
     await app.state.pool.close()
+    await app.state.redis.close()
     
 async def get_connection():
     """
@@ -117,15 +120,19 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
             datapoint.topic, datapoint.object_id
         )
         await conn.execute(
-            """INSERT INTO devices (object_id, jsonpath, topic, entity_id, attribute_name, description) 
-            VALUES ($1, $2, $3, $4, $5, $6)""",
+            """INSERT INTO devices (object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic,
             datapoint.entity_id, datapoint.entity_type, datapoint.attribute_name, 
             datapoint.description
         )
+        
         await postgres_notify("add_datapoint", json.dumps({"object_id": datapoint.object_id,
                                                             "jsonpath": datapoint.jsonpath,
                                                             "topic": datapoint.topic,
+                                                            "entity_id": datapoint.entity_id,
+                                                            "entity_type": datapoint.entity_type,
+                                                            "attribute_name": datapoint.attribute_name,
                                                             "subscribe": subscribe is None}), conn)
         return {**datapoint.dict(), "subscribe": subscribe is None}
     

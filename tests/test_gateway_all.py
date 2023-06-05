@@ -14,9 +14,8 @@ from typing import List
 from dateutil.parser import parse
 import asyncio_mqtt
 
-config = json.load(open("config.json"))
-mqtt_broker_address = config["connection_settings"]["server_ip"]
-orion_address = f"http://{config['connection_settings']['server_ip']}:1026"
+mqtt_broker_address = "localhost"
+orion_address = "http://localhost:1026"
 
 
 max_clients = 1000

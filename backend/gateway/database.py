@@ -10,9 +10,9 @@ class PostgresDB:
     async def init(self):
         self.pool = await asyncpg.create_pool(
             host=os.environ.get("POSTGRES_HOST", "localhost"),
-            user=os.environ.get("POSTGRES_USER", "postgres"),
+            user=os.environ.get("POSTGRES_USER", "karelia"),
             password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
-            database=os.environ.get("POSTGRES_DB", "postgres"),
+            database=os.environ.get("POSTGRES_DB", "iot_devices"),
         )
         async with self.pool.acquire() as conn:
             await conn.execute(
@@ -64,10 +64,10 @@ class PostgresDB:
             )
             return (row["jsonpath"], row["topic"]) if row else None
 
-    async def get_datapoint(self, topic):
+    async def get_datapoints_by_topic(self, topic):
         async with self.pool.acquire() as conn:
             return await conn.fetch(
-                """SELECT object_id, jsonpath FROM devices WHERE topic=$1""", topic
+                """SELECT object_id, jsonpath, entity_id, entity_type, attribute_name FROM devices WHERE topic=$1""",
             )
 
     async def delete_device(self, object_id, topic):
@@ -130,6 +130,13 @@ class PostgresDB:
             
         """
         await self.close()
+
+async def reset_db():
+    async with PostgresDB() as db:
+        await db.init()
+        await db.nuke_table()
+        await db.init()
+        await db.close()
 
 async def get_all_datapoints():
     async with PostgresDB() as db:

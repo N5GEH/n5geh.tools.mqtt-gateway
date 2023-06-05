@@ -18,10 +18,12 @@ from asyncio_mqtt import Client, MqttError, Topic
 import functools
 import time
 import os
-from cachetools import LFUCache
+import aioredis
+from typing import List
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 orion = os.environ.get("ORION_URL", "http://localhost:1026")
 service = os.environ.get("FIWARE_SERVICE", "mqtt_gateway")
 servicepath = os.environ.get("FIWARE_SERVICEPATH", "/mqttgateway")
@@ -56,16 +58,19 @@ class MqttGateway(Client):
             protocol="IoTA-JSON",
         )        
         self.orion = ContextBrokerClient(url=orion, headers=header)
-        self.cache = LFUCache(maxsize=1000)  # Least Frequently Used Cache (least recently used items are discarded first)
+        self.cache = aioredis.from_url(f"redis://{REDIS_HOST}")
             
-    async def add_datapoint(self, object_id: str, jsonpath: str, topic: str, subscribe: bool, client: Client) -> None:
+    async def add_datapoint(self, object_id: str, jsonpath: str, topic: str, entity_id: str, entity_type: str, attribute_name: str, subscribe: bool, client: Client) -> None:
         """
         Adds a new datapoint to the gateway.
 
         Args:
             object_id (str): The object ID of the datapoint.
+            jsonpath (str): The jsonpath of the attribute.
             topic (str): The topic to which the datapoint should be added.
-            attribute (str): The attribute associated with the datapoint.
+            entity_id (str): The entity ID of the datapoint in the Orion Context Broker.
+            entity_type (str): The entity type of the datapoint in the Orion Context Broker.
+            attribute_name (str): The attribute name of the datapoint in the Orion Context Broker.
             subscribe (bool): Whether the gateway should subscribe to the topic.
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
@@ -73,6 +78,11 @@ class MqttGateway(Client):
             f"Adding datapoint {object_id} with jsonpath {jsonpath} and topic {topic} to the gateway"
         )
         await client.subscribe(topic) if subscribe else None
+        await self.cache.sadd(topic, {"object_id": object_id,
+                                      "jsonpath": jsonpath,
+                                      "entity_id": entity_id,
+                                      "entity_type": entity_type,
+                                      "attribute_name": attribute_name})
 
     async def remove_datapoint(self, object_id: str, jsonpath: str, topic: str, unsubscribe: bool, client: Client) -> None:
         """
@@ -87,6 +97,7 @@ class MqttGateway(Client):
             f"Removing datapoint with jsonpath {jsonpath} and topic {topic} from the gateway"
         )
         await client.unsubscribe(topic) if unsubscribe else None
+        await self.cache.srem(topic, object_id)
 
     async def on_message(self, topic: Topic, payload: str) -> None:
         """
@@ -101,25 +112,25 @@ class MqttGateway(Client):
         """
         start_time = time.time()
         print(f"Received message on topic '{topic}'")
-        if topic in self.cache:
-            print("Found topic in cache")
-            datapoints = self.cache[topic]
-        else:
-            async with PostgresDB() as database:
-                datapoints = await database.get_datapoint(topic=str(topic))
-                self.cache[topic] = datapoints
+        datapoints = await self.cache.smembers(topic)
+        if not datapoints:
+            print(f"No datapoints found for topic {topic}, asking Postgres...")
+            async with PostgresDB(DATABASE_URL) as database:
+                datapoints = await database.get_datapoints(topic=str(topic))
                 if not datapoints:
-                    print(f"No datapoint found for topic {topic}")
+                    print(f"No datapoints found for topic {topic}, ignoring message...")
                     return
-            print(f"Got all datapoints in {time.time() - start_time}")
-            attr_dict = {}
-            for datapoint in datapoints:
-                object_id, jsonpath = datapoint
-                entity_id, entity_type, attribute_name = await database.get_mapping(jsonpath, topic=str(topic))
-                data = parse(jsonpath).find(json.loads(payload))
-                if data and entity_id and attribute_name:
-                    attr_data = {"value": data[0].value}  # type automatically changed to Text, change later?
-                    attr_dict[attribute_name] = ContextAttribute(**attr_data)
+                print(f"Succesfully retrieved datapoints for topic {topic} from Postgres: {datapoints}, adding to cache...")
+                await self.cache.sadd(topic, *datapoints)
+        print(f"Found the following datapoints for topic {topic}: {datapoints}")
+        attr_dict = {}
+        for datapoint in datapoints:
+            object_id, jsonpath, entity_id, entity_type, attribute_name = datapoint.values()
+            print(f"Processing datapoint {object_id} with jsonpath {jsonpath} and topic {topic}")
+            data = parse(jsonpath).find(json.loads(payload))
+            if data and entity_id and attribute_name:
+                attr_data = {"value": data[0].value}  # type automatically changed to Text, change later?
+                attr_dict[attribute_name] = ContextAttribute(**attr_data)
             if attr_dict:
                 print(f"In the end, I will be sending the following data to the Context Broker: {attr_dict}")
                 try:
@@ -191,6 +202,9 @@ class MqttGateway(Client):
             await self.add_datapoint(object_id=data["object_id"], 
                                         jsonpath=data["jsonpath"], 
                                         topic=data["topic"], 
+                                        entity_id=data["entity_id"],
+                                        entity_type=data["entity_type"],
+                                        attribute_name=data["attribute_name"],
                                         subscribe=data["subscribe"],
                                         client=client)
         elif channel == "remove_datapoint":
@@ -202,7 +216,30 @@ class MqttGateway(Client):
                                         client=client)
         else:
             print(f"Received notification on unknown channel '{channel}'")
-                
+
+    # The following methods are used to interact with the Postgres database.
+    async def get_datapoints(self):
+        """
+        Returns a list of all datapoints in the Postgres database.
+        """
+        async with asyncpg.connect(DATABASE_URL) as conn:
+            return await conn.fetch("SELECT * FROM datapoints")
+    
+    async def get_datapoints_by_topic(self, topic: str):
+        """
+        Returns a list of all datapoints with the given topic in the Postgres database.
+        """
+        async with asyncpg.connect(DATABASE_URL) as conn:
+            return await conn.fetch("SELECT * FROM datapoints WHERE topic = $1", topic)
+    
+    async def get_unique_topics(self) -> List[str]:
+        """
+        Returns a list of all unique topics in the Postgres database.
+        """
+        async with asyncpg.connect(DATABASE_URL) as conn:
+            return await conn.fetch("SELECT DISTINCT topic FROM datapoints")
+    # End of Postgres methods
+            
     async def run(self):
         """
         Starts the gateway and runs the main loop. Simultaneously listens to PostgreSQL for new topics to subscribe or unsubscribe to.

@@ -238,6 +238,8 @@ function cancelEditing() {
   {#if matchDatapoint}
     <label for="entity_id">Entity ID</label>
     <input type="text" id="entity_id" bind:value={newEntityId} required />
+    <label for="entity_type">Entity Type</label>
+    <input type="text" id="entity_type" bind:value={newEntityType} required />
     <label for="attribute_name">Attribute Name</label>
     <input type="text" id="attribute_name" bind:value={newAttributeName} required />
   {/if}
