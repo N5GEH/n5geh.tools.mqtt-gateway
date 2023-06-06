@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   // Quick svelte rundown:
   // The code in the script tag is written in svelte, which is a javascript framework that compiles to vanilla javascript
   // Each component has a script tag, a body tag and a style tag
@@ -11,22 +11,22 @@
 
   // Variables for the form to add a new datapoint to the database
   // The newObjectId is generated on data submission and is not editable
-  let data = [];
-  let newObjectId = '';
-  let newJsonPath = '';
-  let newTopic = '';
-  let newEntityId = '';
-  let newEntityType = '';
-  let newAttributeName = '';
-  let newDescription = '';
-  let matchDatapoint = false;
+  let data: any[] = [];
+  let newObjectId: string = '';
+  let newJsonPath: string = '';
+  let newTopic: string = '';
+  let newEntityId: string = '';
+  let newEntityType: string = '';
+  let newAttributeName: string = '';
+  let newDescription: string = '';
+  let matchDatapoint: boolean = false;
 
   // Variables for editing a datapoint
   // currentlyEditing is the object_id of the datapoint that is currently being edited
   // tempData is a copy of the datapoint that is currently being edited and is used to store the new values
   // so that the user can cancel the edit and the original values are not lost
-  let currentlyEditing = null;
-  let tempData = null;
+  let currentlyEditing: string = null;
+  let tempData: any = null;
 
   async function fetchData() {
     // Fetch the data from the backend and store it in the data variable for use in the template
@@ -102,28 +102,41 @@ async function getStatus(object_id) {
   // Get the status of a datapoint
   // This is called when the data is fetched from the backend and is used to populate the status column in the table
   // It reflects whether an attribute with the given entity_id and attribute_name exists in the Context Broker
-  const response = await fetch(`http://localhost:8000/data/${object_id}/status/`)
-  const isOnline = await response.json();
-  return isOnline;
+  try {
+    const response = await fetch(`http://localhost:8000/data/${object_id}/status`);
+    return response.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
-async function getOrionStatus() {
-  // Check if the Context Broker is online by fetching the version endpoint
-  try {
-    // TODO: resolve CORS issue
-    const response = await fetch(`http://localhost:1026/version`);
+async function getSystemStatus() {
+  // Get the status of the Context Broker, PostgreSQL and Redis
+  // This is called when the page is loaded and is used to display the status of the services in the header
+  try {  
+    const orionResponse = await fetch('http://localhost:8000/system/orion/status');
+    if (!orionResponse.ok) throw new Error('Orion error');
+    const orionStatus = await orionResponse.json();
 
-    // Check if the response status is OK
-    if (!response.ok) {
-      console.error('HTTP error', response.status);
-      return false;
-    }
+    const postgresResponse = await fetch('http://localhost:8000/system/postgres/status');
+    if (!postgresResponse.ok) throw new Error('Postgres error');
+    const postgresStatus = await postgresResponse.json();
 
-    const isOnline = await response.json();
-    return isOnline;
-  } catch (error) {
-    console.error('Fetch error:', error);
-    return false;
+    const redisResponse = await fetch('http://localhost:8000/system/redis/status');
+    if (!redisResponse.ok) throw new Error('Redis error');
+    const redisStatus = await redisResponse.json();
+
+    return {
+      orion: orionStatus,
+      postgres: postgresStatus,
+      redis: redisStatus,
+    };
+  } catch (e) {
+    return {
+      orion: e.message.includes('Orion') ? 'ERROR' : 'OK',
+      postgres: e.message.includes('Postgres') ? 'ERROR' : 'OK',
+      redis: e.message.includes('Redis') ? 'ERROR' : 'OK',
+    };
   }
 }
 
@@ -147,11 +160,18 @@ function cancelEditing() {
 
 <body>
   <h1>IoT Gateway</h1>
-  <p>Context Broker Status: {#await getOrionStatus()}
-    <span>loading...</span>
-  {:then isOnline}
-    <span>{isOnline ? 'Online' : 'Offline'}</span>
-  {/await}</p>
+  <div class="status">
+  <p>Services status:</p>
+  {#await getSystemStatus()}
+  <p>Checking...</p>
+  {:then systemStatus}
+  <p>Orion: {systemStatus.orion ? 'OK' : 'ERROR'}</p>
+  <p>PostgreSQL: {systemStatus.postgres ? 'OK' : 'ERROR'}</p>
+    <p>Redis: {systemStatus.redis ? 'OK' : 'ERROR'}</p>
+  {:catch error}
+    <p>Error: {error.message}</p>
+  {/await}
+  </div>
 <div class="content">
 <table>
   <thead>
@@ -304,6 +324,20 @@ function cancelEditing() {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
+  }
+
+  .status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 0;
+  }
+
+  .status > p {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 0.25em 0 0.25em 0;
   }
 
   .matchDatapoint {

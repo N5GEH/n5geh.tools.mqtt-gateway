@@ -5,7 +5,6 @@ This module implements the MQTT IoT Gateway.
 import json
 import paho.mqtt.client as mqtt
 import requests
-from database import PostgresDB
 from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.context import ContextAttribute
 from filip.clients.ngsi_v2 import ContextBrokerClient
@@ -18,7 +17,7 @@ from asyncio_mqtt import Client, MqttError, Topic
 import functools
 import time
 import os
-import aioredis
+from redis import asyncio as aioredis
 from typing import List
 
 # Load configuration from JSON file
