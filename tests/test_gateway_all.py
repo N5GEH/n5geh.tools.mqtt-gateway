@@ -18,9 +18,9 @@ mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
 
-max_clients = 1000
-initial_clients = 100
-client_step = 100
+max_clients = 100
+initial_clients = 10
+client_step = 10
 creation_interval = 15
 
 class Metadata(BaseModel):

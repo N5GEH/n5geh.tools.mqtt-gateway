@@ -21,9 +21,9 @@ app.add_middleware(
 )
 
 host = os.environ.get("POSTGRES_HOST", "localhost")
-user = os.environ.get("POSTGRES_USER", "postgres")
+user = os.environ.get("POSTGRES_USER", "karelia")
 password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-database = os.environ.get("POSTGRES_DB", "postgres")
+database = os.environ.get("POSTGRES_DB", "iot_devices")
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -54,7 +54,6 @@ async def startup():
     What it is supposed to achieve is that the gateway can handle 10 concurrent requests (is this appropriate for our use case?)
     """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
-    app.state.redis = await aioredis.create_redis_pool(REDIS_URL)
     
 @app.on_event("shutdown")
 async def shutdown():
@@ -62,7 +61,6 @@ async def shutdown():
     Close the pool of connections to the database. This is to prevent the pool from being left open when the gateway is shut down.
     """
     await app.state.pool.close()
-    await app.state.redis.close()
     
 async def get_connection():
     """
@@ -86,7 +84,7 @@ async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
     """
     Get all datapoints from the database. This is to allow the frontend to display all the registered datapoints in the database.
     """
-    rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description FROM devices")
+    rows = await conn.fetch("SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description FROM datapoints")
     return rows
 
 @app.get("/data/{object_id}", response_model=Datapoint)
@@ -95,7 +93,7 @@ async def get_datapoint(object_id: str, conn: asyncpg.Connection = Depends(get_c
     Get a specific datapoint from the database.
     """
     row = await conn.fetchrow(
-        """SELECT * FROM devices WHERE object_id=$1""",
+        """SELECT * FROM datapoints WHERE object_id=$1""",
         object_id
     )
     if row is None:
@@ -116,11 +114,11 @@ async def add_datapoint(datapoint: Datapoint, conn: asyncpg.Connection = Depends
         # check if there is already a device subscribed to the same topic
         # if so, the gateway will not subscribe to the topic again
         subscribe = await conn.fetchrow(
-            """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
+            """SELECT object_id FROM datapoints WHERE topic=$1 AND object_id!=$2""",
             datapoint.topic, datapoint.object_id
         )
         await conn.execute(
-            """INSERT INTO devices (object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description) 
+            """INSERT INTO datapoints (object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description) 
             VALUES ($1, $2, $3, $4, $5, $6, $7)""",
             datapoint.object_id, datapoint.jsonpath, datapoint.topic,
             datapoint.entity_id, datapoint.entity_type, datapoint.attribute_name, 
@@ -145,7 +143,7 @@ async def update_datapoint(object_id: str, datapoint: DatapointUpdate, conn: asy
     Update a specific datapoint in the database. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
     """
     await conn.execute(
-        """UPDATE devices SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
+        """UPDATE datapoints SET entity_id=$1, attribute_name=$2, description=$3 WHERE object_id=$4""",
         datapoint.entity_id, datapoint.entity_type,
         datapoint.attribute_name, datapoint.description, 
         object_id
@@ -157,24 +155,27 @@ async def delete_datapoint(object_id: str, conn: asyncpg.Connection = Depends(ge
     """
     Delete a specific datapoint from the database. This is to allow the frontend to delete a datapoint from the gateway.
     """
-    topic, jsonpath = await conn.fetchrow(
-        """SELECT topic, jsonpath FROM devices WHERE object_id=$1""",
+    datapoint = await conn.fetchrow(
+        """SELECT jsonpath, topic, entity_id, entity_type, attribute_name FROM datapoints WHERE object_id=$1""",
         object_id
     )
     # check if the topic is the last subscriber
     # if so, the gateway will unsubscribe from the topic
     unsubscribe = await conn.fetchrow(
-        """SELECT object_id FROM devices WHERE topic=$1 AND object_id!=$2""",
-        topic, object_id
+        """SELECT object_id FROM datapoints WHERE topic=$1 AND object_id!=$2""",
+        datapoint["topic"], object_id
     )
     await conn.execute(
-        """DELETE FROM devices WHERE object_id=$1""",
+        """DELETE FROM datapoints WHERE object_id=$1""",
         object_id
     )
     
     await postgres_notify("remove_datapoint", json.dumps({"object_id": object_id,
-                                                         "topic": topic,
-                                                         "jsonpath": jsonpath,
+                                                         "jsonpath": datapoint["jsonpath"],
+                                                         "topic": datapoint["topic"],
+                                                         "entity_id": datapoint["entity_id"],
+                                                         "entity_type": datapoint["entity_type"],
+                                                         "attribute_name": datapoint["attribute_name"],                                                 
                                                          "unsubscribe": unsubscribe is None}), conn)
     return None
 
@@ -184,7 +185,7 @@ async def get_match_status(object_id: str, conn: asyncpg.Connection = Depends(ge
     Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
     """
     row = await conn.fetchrow(
-        """SELECT entity_id, attribute_name FROM devices WHERE object_id=$1""",
+        """SELECT entity_id, attribute_name FROM datapoints WHERE object_id=$1""",
         object_id
     )
     if row is None:
