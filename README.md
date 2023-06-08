@@ -121,7 +121,7 @@ services:
       timeout: 30s
       retries: 3
     volumes:
-      - /home/temavasilev/.config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - $HOME/.config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
 networks:
   default:
@@ -133,10 +133,26 @@ volumes:
 ```
 
 ## Usage
+### Docker
 The repository contains a docker-compose.yml file that can be used to start the gateway and all the necessary services. The gateway can be started with the following command:
 ```bash
 docker-compose build && docker-compose up -d
 ```
+
+### Environment variables
+The gateway can be configured with the following environment variables:
+- `ORION_URL` - the URL of the Orion Context Broker
+- `MQTT_HOST` - the hostname of the MQTT broker
+- `MQTT_PORT` - the port of the MQTT broker
+- `POSTGRES_HOST` - the hostname of the PostgreSQL database
+- `POSTGRES_USER` - the username for the PostgreSQL database
+- `POSTGRES_PASSWORD` - the password for the PostgreSQL database
+- `POSTGRES_DB` - the name of the PostgreSQL database
+- `REDIS_URL` - the URL of the Redis database (used for caching)
+- `FIWARE_SERVICE` - the FIWARE service name
+- `FIWARE_SERVICEPATH` - the FIWARE service path
+- `API_KEY` - the API key for the gateway
+
 
 ## Preview
 ![Frontend](frontend/preview/preview_v0.1.png)
