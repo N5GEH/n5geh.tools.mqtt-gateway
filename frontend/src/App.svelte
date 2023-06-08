@@ -104,7 +104,9 @@ async function getStatus(object_id) {
   // It reflects whether an attribute with the given entity_id and attribute_name exists in the Context Broker
   try {
     const response = await fetch(`http://localhost:8000/data/${object_id}/status`);
-    return response.ok;
+    if (!response.ok) throw new Error('Error');
+    const status = await response.json();
+    return status;
   } catch (e) {
     return false;
   }

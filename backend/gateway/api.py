@@ -53,8 +53,10 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 @app.on_event("startup")
 async def startup():
     """
-    Create a pool of connections to the database. The pool size is 10 connections.
-    What it is supposed to achieve is that the gateway can handle 10 concurrent requests (is this appropriate for our use case?)
+    Create a pool of connections to the database. This is to ensure that the gateway does not have to create a new connection
+    to the database for every request. Instead, it can reuse an existing connection from the pool for efficiency.
+    Moreover, create a connection to the redis cache to store the subscriptions to the topics and a connection to another redis cache
+    to store the notifications to the database.
     """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
     app.state.redis = await aioredis.from_url(
@@ -68,7 +70,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     """
-    Close the pool of connections to the database. This is to prevent the pool from being left open when the gateway is shut down.
+    Close the pool of connections to the PostgreSQL database and the connection to the redis caches.
     """
     await app.state.pool.close()
     await app.state.redis.close()
@@ -93,6 +95,9 @@ async def get_connection():
     description="Get all datapoints from the gateway. This is to allow the frontend to display all the registered datapoints in the database.",
 )
 async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Get all datapoints from the gateway. This is to allow the frontend to display all the registered datapoints in the database.
+    """
     rows = await conn.fetch(
         "SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description FROM datapoints"
     )
@@ -109,6 +114,18 @@ async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
 async def get_datapoint(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
+    """
+    Get a specific datapoint from the gateway. This is to allow the frontend to display a specific datapoint in the database.
+    If the datapoint is not found, an error will be raised.
+
+    Args:
+        object_id (str): The object_id of the datapoint to be retrieved
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+    
+    Raises:
+        HTTPException: If the datapoint is not found, a 404 error will be raised.
+    
+    """
     row = await conn.fetchrow(
         """SELECT * FROM datapoints WHERE object_id=$1""", object_id
     )
@@ -130,6 +147,21 @@ async def get_datapoint(
 async def add_datapoint(
     datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
 ):
+    """
+    Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
+    In (a very unlikely) case where the datapoint was supposed to be matched but the corresponding information is not provided,
+    an error will be raised. If the datapoint is successfully added, a notification will be sent to the database to notify the
+    database that a new datapoint has been added as well as whether the topic needs to be subscribed to.
+
+    Args:
+        datapoint (Datapoint): The datapoint to be added to the gateway.
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+
+    Raises:
+        HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+        UniqueViolationError: If the object_id of the datapoint already exists in the database, a 409 error will be raised.
+        Exception: If some other error occurs, a 500 error will be raised.
+    """
     if datapoint.matchDatapoint and (
         datapoint.entity_id is None or datapoint.attribute_name is None
     ):
@@ -158,10 +190,13 @@ async def add_datapoint(
                 datapoint.description,
             )
 
+        # store the jsonpath and topic in redis for easy retrieval later
         await app.state.redis.set(
             datapoint.object_id,
             json.dumps({"jsonpath": datapoint.jsonpath, "topic": datapoint.topic}),
         )
+
+        # publish a notification to the database to notify that a new datapoint has been added
         await app.state.notifier.publish(
             "add_datapoint",
             json.dumps(
@@ -180,7 +215,7 @@ async def add_datapoint(
         return {**datapoint.dict(), "subscribe": subscribe is None}
 
     except asyncpg.exceptions.UniqueViolationError:
-        raise HTTPException(status_code=400, detail="Device already exists!")
+        raise HTTPException(status_code=409, detail="Device already exists!")
 
     except Exception as e:
         print(e)
@@ -198,6 +233,17 @@ async def update_datapoint(
     datapoint: DatapointUpdate,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
+    """
+    Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
+
+    Args:
+        object_id (str): The object_id of the datapoint to be updated.
+        datapoint (DatapointUpdate): The updated datapoint.
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+    
+    Raises:
+        HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+    """
     await conn.execute(
         """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
         datapoint.entity_id,
@@ -231,6 +277,16 @@ async def update_datapoint(
 async def delete_datapoint(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
+    """
+    Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
+    
+    Args:
+        object_id (str): The object_id of the datapoint to be deleted.
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+
+    Raises:
+        Exception: If some error occurs, a 500 error will be raised.
+    """
     try:
         async with conn.transaction():
             datapoint = await conn.fetchrow(
@@ -278,20 +334,32 @@ async def delete_datapoint(
 async def get_match_status(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
+    """
+    Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
+
+    Args:
+        object_id (str): The object_id of the datapoint to be checked.
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+    
+    Raises:
+        HTTPException: If the datapoint is not found in the Context Broker, a 404 error will be raised.
+    
+    Returns:
+        bool: True if the datapoint is matched to an existing entity/attribute pair in the Context Broker, False otherwise.
+    """
     row = await conn.fetchrow(
-        """SELECT entity_id, attribute_name FROM datapoints WHERE object_id=$1""",
+        """SELECT entity_id, entity_type, attribute_name FROM datapoints WHERE object_id=$1""",
         object_id,
     )
     if row is None:
-        raise HTTPException(status_code=404, detail="Device not found!")
+        raise HTTPException(status_code=404, detail="Datapoint not found!")
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}"
+            f"{ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}/?type={row['entity_type']}"
         )
         return response.status_code == 200
-
-
+    
 @app.get(
     "/system/orion/status",
     response_model=bool,
@@ -299,6 +367,12 @@ async def get_match_status(
     description="Get the status of the Context Broker. This is to allow the frontend to check whether the Context Broker is reachable.",
 )
 async def get_orion_status():
+    """
+    Get the status of the Context Broker. This is to allow the frontend to check whether the Context Broker is reachable.
+
+    Returns:
+        bool: True if the Context Broker is reachable, False otherwise.
+    """
     async with httpx.AsyncClient() as client:
         response = await client.get(f"{ORION_URL}/version")
         return response.status_code == 200
@@ -311,6 +385,18 @@ async def get_orion_status():
     description="Get the status of the database. This is to allow the frontend to check whether the database is reachable.",
 )
 async def get_postgres_status(conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Get the status of the database. This is to allow the frontend to check whether the database is reachable.
+
+    Args:
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+    
+    Raises:
+        HTTPException: If the database is not reachable, a 500 error will be raised.
+    
+    Returns:
+        bool: True if the database is reachable, False otherwise.
+    """
     try:
         await conn.execute("SELECT 1")
         return True
@@ -325,6 +411,15 @@ async def get_postgres_status(conn: asyncpg.Connection = Depends(get_connection)
     description="Get the status of the Redis cache. This is to allow the frontend to check whether the Redis server is reachable.",
 )
 async def get_redis_status():
+    """
+    Get the status of the Redis cache. This is to allow the frontend to check whether the Redis cache is reachable.
+    
+    Raises:
+        HTTPException: If the Redis cache is not reachable, a 500 error will be raised.
+    
+    Returns:
+        bool: True if the Redis cache is reachable, False otherwise.
+    """
     try:
         await app.state.redis.ping()
         return True
