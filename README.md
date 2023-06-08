@@ -5,25 +5,140 @@ This is a project for my Bachelor's thesis. It is a simple software-based IoT Ga
 
 
 ## Installation
-### Backend
-The backend is written in Python 3.10. It uses the [FastAPI](https://fastapi.tiangolo.com/) framework and the [uvicorn](https://www.uvicorn.org/) server. The easiest way to install the backend is to use pip. A Dockerfile is in the works.
+### Environment 
+The docker-compose.yml used for testing is
+```yaml
+version: '3.8'
+services:
+  orion:
+    image: fiware/orion:3.8.1
+    hostname: orion
+    container_name: fiware-orion
+    depends_on:
+      - mongo-db
+    networks:
+      - default
+    expose:
+      - "1026"
+    ports:
+      - "1026:1026"
+    command: -dbhost mongo-db
+    healthcheck:
+      test: curl --fail -s http://localhost:1026/version || exit 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
 
-```bash
-pip install -r requirements.txt
-uvicorn main:app --reload
-# runs in port 8000
+  mongo-db:
+    image: mongo:4.4
+    hostname: mongo-db
+    container_name: fiware-mongo-db
+    expose:
+      - "27017"
+    networks:
+      - default
+    ports:
+      - "27017:27017"
+    command: --nojournal
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  postgres:
+    image: postgres:15.2
+    hostname: postgres
+    container_name: fiware-postgres
+    expose:
+      - "5432"
+    networks:
+      - default
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=iot_devices
+      - POSTGRES_USER=karelia
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: pg_isready -U orion -d orion -h localhost
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    volumes:
+      - /postgres-data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:7.1
+    hostname: pgadmin
+    container_name: fiware-pgadmin
+    expose:
+      - "80"
+    networks:
+      - default
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=karelia@postgres.com
+      - PGADMIN_DEFAULT_PASSWORD=pgadmin
+    depends_on:
+      - postgres
+    healthcheck:
+      test: curl --fail -s http://localhost:8080 || exit 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  redis:
+    image: redis:7.0
+    hostname: redis
+    container_name: fiware-redis
+    expose:
+      - "6379"
+    networks:
+      - default
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0.14
+    hostname: mosquitto
+    container_name: fiware-mosquitto
+    expose:
+      - "1883"
+    networks:
+      - default
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test: mosquitto_sub -h localhost -t test -C 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    volumes:
+      - /home/temavasilev/.config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+networks:
+  default:
+    external: true
+    name: bachelor_project
+
+volumes:
+  crate:
 ```
 
-### Frontend
-The frontend is written in [Svelte](https://svelte.dev/). It uses [Rollup](https://rollupjs.org/guide/en/) as a bundler. The easiest way to install the frontend is to use [npm](https://www.npmjs.com/). A Dockerfile is equally in the works.
-
+## Usage
+The repository contains a docker-compose.yml file that can be used to start the gateway and all the necessary services. The gateway can be started with the following command:
 ```bash
-cd frontend
-npm install
-npm run dev
-# runs in port 5173
+docker-compose build && docker-compose up -d
 ```
 
+## Preview
 ![Frontend](frontend/preview/preview_v0.1.png)
 
 
