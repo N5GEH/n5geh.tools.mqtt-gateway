@@ -66,6 +66,21 @@ async def startup():
         REDIS_URL + "/1"
     )  # different db for notifications
 
+    async with app.state.pool.acquire() as connection:
+        # async with is used to ensure that the connection is released back to the pool after the request is done
+        await connection.execute(
+            """CREATE TABLE IF NOT EXISTS datapoints (
+                object_id TEXT PRIMARY KEY,
+                jsonpath TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                entity_id TEXT,
+                entity_type TEXT,
+                attribute_name TEXT,
+                description TEXT,
+                matchDatapoint BOOLEAN DEFAULT FALSE
+            )"""
+        )
+
 
 @app.on_event("shutdown")
 async def shutdown():

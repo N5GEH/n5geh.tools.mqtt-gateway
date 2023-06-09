@@ -8,9 +8,6 @@ ENV PYTHONUNBUFFERED 1
 # Set working directory
 WORKDIR /app
 
-# Create directories for logs
-RUN mkdir /var/log/supervisord /var/log/api /var/log/gateway
-
 # Copy requirements.txt
 COPY requirements.txt ./
 
