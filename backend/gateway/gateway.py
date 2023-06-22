@@ -19,6 +19,9 @@ from filip.models.ngsi_v2.context import ContextAttribute
 from filip.models.ngsi_v2.iot import Device
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
+import httpx
+from aiologger import Logger
+from aiologger.handlers.files import AsyncFileHandler
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
@@ -50,7 +53,7 @@ class MqttGateway(Client):
 
     def __init__(self):
         super().__init__(hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5)
-        self.s = requests.Session()
+        self.s = httpx.AsyncClient()
         # Create gateway device
         self.gateway_device = Device(
             device_id="gateway:001",
@@ -66,6 +69,9 @@ class MqttGateway(Client):
             url=f"{REDIS_URL}/1"
         ).pubsub()  # PubSub channel for notifying the API about new data
         self.conn = None  # Initialized in run()
+        self.logger = Logger.with_default_handlers(name="mqtt-gateway")
+        self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
+
 
     async def add_datapoint(
         self,
@@ -189,64 +195,63 @@ class MqttGateway(Client):
             payload (str): The payload of the message.
         """
         start_time = time.time()
-        topic = str(topic)  # Convert Topic object to string for easier processing
-        print(f"Received message on topic '{topic}'")
+        topic = str(topic)
+        await self.logger.info(f"Received message on topic '{topic}'")
         if not await self.cache.hlen(topic):
-            print(f"No datapoints found for topic {topic} in cache, asking Postgres...")
+            await self.logger.info(f"No datapoints found for topic {topic} in cache, asking Postgres...")
             async with self.conn.transaction():
                 datapoints = await self.get_datapoints_by_topic(topic)
                 if not datapoints:
-                    print(f"No datapoints found for topic {topic}, ignoring message...")
+                    await self.logger.info(f"No datapoints found for topic {topic}, ignoring message...")
                     return
-                print(
+                await self.logger.info(
                     f"Succesfully retrieved datapoints for topic {topic} from Postgres: {datapoints}, adding to cache..."
                 )
                 for datapoint in datapoints:
                     await self.cache.hset(
                         topic,
                         datapoint["object_id"],
-                        json.dumps(
-                            {
-                                "object_id": datapoint["object_id"],
-                                "jsonpath": datapoint["jsonpath"],
-                                "entity_id": datapoint["entity_id"],
-                                "entity_type": datapoint["entity_type"],
-                                "attribute_name": datapoint["attribute_name"],
-                            }
-                        ),
+                        json.dumps(datapoint),
                     )
         datapoints = await self.cache.hgetall(topic)
-        print(f"Found the following datapoints for topic {topic}: {datapoints}")
-        attr_dict = {}
+        await self.logger.info(f"Found the following datapoints for topic {topic}: {datapoints}")
 
+        tasks = []
         for datapoint in datapoints.values():
             datapoint = json.loads(datapoint)
-            print(f"Processing datapoint {datapoint['object_id']}...")
-            data = parse(datapoint["jsonpath"]).find(json.loads(payload))
-            if (
-                data
-                and datapoint["entity_id"]
-                and datapoint["entity_type"]
-                and datapoint["attribute_name"]
-            ):
-                attr_data = {
-                    "value": data[0].value
-                }  # type automatically changed to Text, change later?
-                attr_dict[datapoint["attribute_name"]] = ContextAttribute(**attr_data)
-        if attr_dict:
-            print(
-                f"In the end, I will be sending the following data to the Context Broker: {attr_dict}"
+            await self.logger.info(f"Processing datapoint {datapoint['object_id']}...")
+            tasks.append(self.process_datapoint(datapoint, json.loads(payload)))
+
+        await asyncio.gather(*tasks)
+        await self.logger.info(
+            f"Finished processing datapoint {datapoint['object_id']} in {time.time() - start_time} seconds"
+        )
+
+    async def process_datapoint(self, datapoint, payload):
+        data = parse(datapoint["jsonpath"]).find(payload)
+        if (
+            data
+            and datapoint["entity_id"]
+            and datapoint["entity_type"]
+            and datapoint["attribute_name"]
+        ):
+            attr_data = {
+                datapoint["attribute_name"]: {
+                    "value": data[0].value,
+                }
+            }  # type automatically changed to Text, change later?
+        try:
+            await self.s.patch(
+                f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                json=attr_data,
             )
-            try:
-                self.orion.update_existing_entity_attributes(
-                    entity_id=datapoint["entity_id"],
-                    entity_type=datapoint["entity_type"],
-                    attrs=attr_dict,
-                )
-            except requests.exceptions.HTTPError as e:
-                print(f"Error while sending data to the Context Broker: {e}")
-            finally:
-                print(f"Sent the data to Orion in {time.time() - start_time}")
+            await self.logger.info(
+                f"Successfully sent data {attr_data} to Orion Context Broker for entity {datapoint['entity_id']}"
+            )
+        except Exception as e:
+            await self.logger.error(f"Error sending data to Orion Context Broker: {e}")
+
+
 
     async def mqtt_listener(self, client: Client) -> None:
         """

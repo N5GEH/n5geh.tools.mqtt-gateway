@@ -13,91 +13,37 @@ from pydantic import BaseModel
 from uvicorn import Config, Server
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
+from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
+from collections import defaultdict
+from filip.models.ngsi_v2.iot import Device
+from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 
 from plots.plots import plot_message_loss, plot_percentage_loss, plot_latency
 import sys
-from collections import defaultdict
 
-mqtt_broker_address = "localhost"
-orion_address = "http://localhost:1026"
+CBC = ContextBrokerClient("http://localhost:1026/")
+IOTA = IoTAClient("http://localhost:4041/")
+MQTT_HOSTNAME = "localhost"
 
-max_clients = 10
-initial_clients = 5
-client_step = 2
-creation_interval = 5
+MAX_CLIENTS = 1000
+INITIAL_CLIENTS = 100
+CLIENT_STEP = 100
+CREATION_INTERVAL = 15
 
-stage_count = max_clients // client_step
-messages_sent = [0] * stage_count
-messages_received = [0] * stage_count
-messages_per_second = [0] * stage_count
+STAGE_COUNT = MAX_CLIENTS // CLIENT_STEP
+
+messages_sent = [0] * STAGE_COUNT
+messages_received = [0] * STAGE_COUNT
+messages_per_second = [0] * STAGE_COUNT
 latencies = defaultdict(list)
 
 stage = 0
 
+logger = Logger.with_default_handlers()
+logger.add_handler(AsyncFileHandler("baseline.log"))
+
 last_message_received = asyncio.Event()
 generate_messages = asyncio.Event()
-
-class Metadata(BaseModel):
-    type: str
-    value: str
-
-
-class Attribute(BaseModel):
-    type: str
-    value: str
-    metadata: dict[str, Metadata]
-
-
-class Entity(BaseModel):
-    id: str
-    type: str
-    temperature: Attribute
-    humidity: Attribute
-    pressure: Attribute
-    co2: Attribute
-    timestamp: Attribute
-
-
-class Notification(BaseModel):
-    subscriptionId: str
-    data: List[Entity]
-
-
-async def generate_subscription() -> int:
-    """
-    Generate a subscription for the test/latency topic. This is used to test the latency of the Orion Context Broker.
-    The idea is to generate a subscription for the topic and then publish a message to the topic. The subscription should
-    then be triggered and the message should be forwarded to the specified endpoint. We can then measure the latency
-    between the publishing of the message and the reception of the message at the endpoint.
-    """
-    subscription = {
-        "description": "Latency test subscription",
-        "subject": {
-            "entities": [{"id": "TestFacility", "type": "Room"}],
-            "condition": {
-                "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"]
-            },
-        },
-        "notification": {
-            # "http": {"url": "http://host.docker.internal:8001/latency/notification"},
-            "mqtt": {
-                "url": "mqtt://host.docker.internal:1883",
-                "qos": 0,
-                "topic": "test/timestamp"
-            },
-            "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"],
-            "metadata": ["dateCreated", "dateModified"],
-        },
-        "expires": "2040-01-01T14:00:00.00Z",
-    }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:1026/v2/subscriptions",
-            json=subscription,
-            headers={"Content-Type": "application/json"},
-        )
-        return response.status_code
-
 
 async def receive_mqtt_notification() -> None:
     """
@@ -123,47 +69,9 @@ async def receive_mqtt_notification() -> None:
                 print(f"Payload timestamp: {payload_timestamp}")
                 print(f"Date modified: {date_modified}")
                 print(f"Time: {times}")
-                latency = (date_modified - payload_timestamp) * 1000
+                latency = (times - payload_timestamp) * 1000
                 latencies[stage].append(latency)
                 print(f"Latency: {latency:.3f} ms (MQTT)")
-
-
-async def start_server() -> None:
-    """
-    Start the FastAPI server that will receive the notifications from the Orion Context Broker.
-    """
-    app = FastAPI()
-
-    @app.post("/latency/notification")
-    async def receive_http_notification(notification: Notification) -> dict:
-        """
-        Receive a notification from the Orion Context Broker and calculate the latency.
-        This function is called whenever a notification is received from the Orion Context Broker.
-        The notification contains the payload that was published to the topic, as well as the metadata of the payload
-        which contains the timestamp of the payload. We can then calculate the latency by subtracting the timestamp of the payload
-        from the current timestamp. We iterate over all attributes of the payload and pick the one with the latest timestamp because
-        this is the one that was published last and therefore the one that triggered the notification.
-
-        Args:
-            notification (Notification): The notification that was received from the Orion Context Broker.
-            For structure, see the pydantic models above.
-
-        Returns:
-            dict: A dictionary containing the latency in seconds (perhaps change later)
-        """
-        # Get the current time
-        current_timestamp = time.time()
-        payload_timestamp = float(notification.data[0].timestamp.value)
-
-        # Calculate the latency
-        latency = (current_timestamp - payload_timestamp) * 1000
-        print(f"Latency: {latency:.3f} ms (HTTP)")
-        return {"latency": latency}
-
-    config = Config(app=app, host="0.0.0.0", port=8001)
-    server = Server(config=config)
-    await server.serve()
-
 
 async def generate_random_string(length: int) -> str:
     """
@@ -186,9 +94,13 @@ async def generate_payload() -> str:
     fake_attribute = await generate_random_string(10)
     messages_sent[stage] += 1
     return json.dumps(
-        {fake_attribute: round(uniform(0, 100), 2), real_attribute: time.time()}
+        {fake_attribute: {
+            "value": round(uniform(0, 100), 2), 
+        }, 
+        real_attribute: {
+            "value": time.time()}
+        }
     )
-
 
 async def generate_client() -> None:
     """
@@ -198,11 +110,19 @@ async def generate_client() -> None:
     properly, while the timestamp is used to calculate the latency.
     """
     try:
-        async with MQTTClient(mqtt_broker_address) as client:
+        async with MQTTClient(MQTT_HOSTNAME) as client:
             await client.connect()
             while True:
                 await generate_messages.wait()
-                await client.publish("test/latency", await generate_payload())
+                try:
+                    CBC.update_existing_entity_attributes(
+                        "TestFacility",
+                        "Room",
+                        json.loads(await generate_payload()),
+                    )
+                except Exception as e:
+                    pass
+                #await client.publish("test/latency", await generate_payload())
                 await asyncio.sleep(1)
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -227,7 +147,7 @@ async def generate_clients(
     logger.add_handler(AsyncFileHandler("benchmark.log", mode="a"))
     try:
         global stage
-        for _ in range(max_clients // client_step):
+        for _ in range(MAX_CLIENTS // client_step):
             print(f"Stage {stage}")
             generate_messages.set()
             messages_per_second[stage] = client_step * (stage + 1)
@@ -247,9 +167,10 @@ async def generate_clients(
             task.cancel()
         # Wait for all tasks to complete their cancellation
         await asyncio.gather(*tasks, return_exceptions=True)
-        plot_message_loss(messages_sent, messages_received, messages_per_second)
-        plot_percentage_loss(messages_sent, messages_received, messages_per_second)
-        plot_latency(messages_per_second, latencies)
+        plot_message_loss(messages_sent, messages_received, messages_per_second, baseline=True)
+        plot_percentage_loss(messages_sent, messages_received, messages_per_second, baseline=True)
+        plot_latency(messages_per_second, latencies, baseline=True)
+
 
 async def wait_for_last_stage_message(wait_time: int = 5):
     """
@@ -265,45 +186,20 @@ async def wait_for_last_stage_message(wait_time: int = 5):
             break
 
 
-async def wait_for_last_message():
-    """
-    Wait for the last message to be received. If no message is received in the last 30 seconds, plot the message loss and exit.
-    """
-    global last_message_received
-    while True:
-        await last_message_received.wait()
-        await asyncio.sleep(30)
-        if last_message_received.is_set():
-            last_message_received.clear()
-            print("No messages received in the last 30 seconds. Plotting and exiting...")
-            plot_message_loss(messages_sent, messages_received, stage)
-            plot_percentage_loss(messages_sent, messages_received, stage)
-            plot_latency(messages_per_second, latencies)
-            break
-        else:
-            last_message_received.clear()
-
 async def main():
-    """
-    Main function that starts the FastAPI server and generates the clients.
-    The exception sent when the user presses CTRL+C is KeyboardInterrupt, which we need to handle gracefully here.
-    Otherwise due to the async nature of the code, the code would continue running and the server would not be closed.
-    """
     try:
-        server = asyncio.create_task(start_server())
         test_clients = asyncio.create_task(
-            generate_clients(initial_clients, client_step, creation_interval)
+            generate_clients(INITIAL_CLIENTS, CLIENT_STEP, CREATION_INTERVAL)
         )
         sub_listen = asyncio.create_task(receive_mqtt_notification())
-        await asyncio.gather(server, test_clients, sub_listen)
+        await asyncio.gather(test_clients, sub_listen)
     except KeyboardInterrupt:
         print("Received exit signal. Shutting down...")
         for task in asyncio.all_tasks():
             task.cancel()
-        await server.aclose()  # Close the FastAPI server
         print("Shutdown complete.")
         sys.exit(0)
 
-
+    
 if __name__ == "__main__":
     asyncio.run(main())
