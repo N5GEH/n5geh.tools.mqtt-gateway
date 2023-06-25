@@ -1,11 +1,17 @@
+from collections import defaultdict
+from typing import List
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import make_interp_spline
-from typing import List
-from collections import defaultdict
 
 
-def plot_percentage_loss(messages_sent: List, messages_received: List, messages_per_second: List, baseline: bool = False) -> None:
+def plot_percentage_loss(
+    messages_sent: List,
+    messages_received: List,
+    messages_per_second: List,
+    baseline: bool = False,
+) -> None:
     print(f"Messages sent: {messages_sent}")
     print(f"Messages received: {messages_received}")
     messages_sent = np.array(messages_sent)
@@ -16,7 +22,9 @@ def plot_percentage_loss(messages_sent: List, messages_received: List, messages_
     x = np.arange(len(messages_per_second))  # the label locations
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    scatter = ax.scatter(x, percentage_loss, color="#ff7f0e", zorder=5)  # plot the dots on the graph
+    scatter = ax.scatter(
+        x, percentage_loss, color="#ff7f0e", zorder=5
+    )  # plot the dots on the graph
     ax.grid(True)  # add a grid
 
     # interpolate to get a smooth curve
@@ -35,8 +43,14 @@ def plot_percentage_loss(messages_sent: List, messages_received: List, messages_
     ax.set_ylim(0, 100)  # ensure y-axis starts at 0% and ends at 100%
 
     # Annotate the exact percentage loss at each data point
-    for (i, perc) in zip(x, percentage_loss):
-        ax.annotate(f"{perc:.2f}%", (i, perc), textcoords="offset points", xytext=(0, 10), ha='center')
+    for i, perc in zip(x, percentage_loss):
+        ax.annotate(
+            f"{perc:.2f}%",
+            (i, perc),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha="center",
+        )
 
     fig.tight_layout()
     if baseline:
@@ -46,7 +60,12 @@ def plot_percentage_loss(messages_sent: List, messages_received: List, messages_
     plt.show()
 
 
-def plot_message_loss(messages_sent: List, messages_received: List, messages_per_second: List, baseline: bool = False) -> None:
+def plot_message_loss(
+    messages_sent: List,
+    messages_received: List,
+    messages_per_second: List,
+    baseline: bool = False,
+) -> None:
     print(f"Messages sent: {messages_sent}")
     print(f"Messages received: {messages_received}")
     messages_sent = np.array(messages_sent)
@@ -58,7 +77,9 @@ def plot_message_loss(messages_sent: List, messages_received: List, messages_per
     width = 0.35  # the width of the bars
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    rects1 = ax.bar(x - width / 2, messages_sent, width, label="Messages Sent", color="#ff7f0e")
+    rects1 = ax.bar(
+        x - width / 2, messages_sent, width, label="Messages Sent", color="#ff7f0e"
+    )
     rects2 = ax.bar(x + width / 2, messages_received, width, label="Messages Received")
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
@@ -89,7 +110,10 @@ def plot_message_loss(messages_sent: List, messages_received: List, messages_per
         plt.savefig("tests/results/gateway_message_loss_bar.png")
     plt.show()
 
-def plot_latency(messages_per_second: List, latencies: defaultdict, baseline: bool = False) -> None:
+
+def plot_latency(
+    messages_per_second: List, latencies: defaultdict, baseline: bool = False
+) -> None:
     """
     Plot the latency of the messages sent to the gateway.
     The plot is a boxplot with the latency on the y-axis and the number of clients on the x-axis.

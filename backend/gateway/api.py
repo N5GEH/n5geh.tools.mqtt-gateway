@@ -136,10 +136,10 @@ async def get_datapoint(
     Args:
         object_id (str): The object_id of the datapoint to be retrieved
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-    
+
     Raises:
         HTTPException: If the datapoint is not found, a 404 error will be raised.
-    
+
     """
     row = await conn.fetchrow(
         """SELECT * FROM datapoints WHERE object_id=$1""", object_id
@@ -255,7 +255,7 @@ async def update_datapoint(
         object_id (str): The object_id of the datapoint to be updated.
         datapoint (DatapointUpdate): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-    
+
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
     """
@@ -294,7 +294,7 @@ async def delete_datapoint(
 ):
     """
     Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
-    
+
     Args:
         object_id (str): The object_id of the datapoint to be deleted.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
@@ -339,6 +339,48 @@ async def delete_datapoint(
         print(e)
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
+@app.delete(
+    "/data",
+    status_code=204,
+    summary="Delete all datapoints from the gateway",
+    description="Delete all datapoints from the gateway. This is to allow the frontend to delete all datapoints from the gateway and unsubscribe from all topics.",
+)
+async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
+    """
+    Delete all datapoints from the gateway. This is to allow the frontend to delete all datapoints from the gateway and unsubscribe from all topics.
+
+    Args:
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+
+    Raises:
+        Exception: If some error occurs, a 500 error will be raised.
+    """
+    try:
+        async with conn.transaction():
+            datapoints = await conn.fetch(
+                """SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name FROM datapoints"""
+            )
+            await conn.execute("""DELETE FROM datapoints""")
+        for datapoint in datapoints:
+            await app.state.redis.delete(datapoint["object_id"])
+            await app.state.notifier.publish(
+                "delete_datapoint",
+                json.dumps(
+                    {
+                        "object_id": datapoint["object_id"],
+                        "jsonpath": datapoint["jsonpath"],
+                        "topic": datapoint["topic"],
+                        "entity_id": datapoint["entity_id"],
+                        "entity_type": datapoint["entity_type"],
+                        "attribute_name": datapoint["attribute_name"],
+                        "unsubscribe": True,
+                    }
+                ),
+            )
+        return None
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Internal Server Error!")
 
 @app.get(
     "/data/{object_id}/status",
@@ -355,10 +397,10 @@ async def get_match_status(
     Args:
         object_id (str): The object_id of the datapoint to be checked.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-    
+
     Raises:
         HTTPException: If the datapoint is not found in the Context Broker, a 404 error will be raised.
-    
+
     Returns:
         bool: True if the datapoint is matched to an existing entity/attribute pair in the Context Broker, False otherwise.
     """
@@ -374,7 +416,8 @@ async def get_match_status(
             f"{ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}/?type={row['entity_type']}"
         )
         return response.status_code == 200
-    
+
+
 @app.get(
     "/system/orion/status",
     response_model=bool,
@@ -405,10 +448,10 @@ async def get_postgres_status(conn: asyncpg.Connection = Depends(get_connection)
 
     Args:
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-    
+
     Raises:
         HTTPException: If the database is not reachable, a 500 error will be raised.
-    
+
     Returns:
         bool: True if the database is reachable, False otherwise.
     """
@@ -428,10 +471,10 @@ async def get_postgres_status(conn: asyncpg.Connection = Depends(get_connection)
 async def get_redis_status():
     """
     Get the status of the Redis cache. This is to allow the frontend to check whether the Redis cache is reachable.
-    
+
     Raises:
         HTTPException: If the Redis cache is not reachable, a 500 error will be raised.
-    
+
     Returns:
         bool: True if the Redis cache is reachable, False otherwise.
     """

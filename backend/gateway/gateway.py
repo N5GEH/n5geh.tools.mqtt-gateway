@@ -10,25 +10,23 @@ from typing import List
 
 import async_timeout
 import asyncpg
+import httpx
 import paho.mqtt.client as mqtt
-import requests
+from aiologger import Logger
+from aiologger.handlers.files import AsyncFileHandler
 from asyncio_mqtt import Client, MqttError, Topic
 from filip.clients.ngsi_v2 import ContextBrokerClient
 from filip.models.base import FiwareHeader
-from filip.models.ngsi_v2.context import ContextAttribute
 from filip.models.ngsi_v2.iot import Device
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
-import httpx
-from aiologger import Logger
-from aiologger.handlers.files import AsyncFileHandler
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 orion = os.environ.get("ORION_URL", "http://localhost:1026")
-service = os.environ.get("FIWARE_SERVICE", "mqtt_gateway")
-servicepath = os.environ.get("FIWARE_SERVICEPATH", "/mqttgateway")
+service = os.environ.get("FIWARE_SERVICE", "gateway")
+servicepath = os.environ.get("FIWARE_SERVICEPATH", "/gateway")
 header = FiwareHeader(service=service, service_path=servicepath)
 api_key = os.environ.get("API_KEY", "plugnplay")
 
@@ -71,7 +69,6 @@ class MqttGateway(Client):
         self.conn = None  # Initialized in run()
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
-
 
     async def add_datapoint(
         self,
@@ -196,13 +193,17 @@ class MqttGateway(Client):
         """
         start_time = time.time()
         topic = str(topic)
-        await self.logger.info(f"Received message on topic '{topic}'")
+        await self.logger.info(f"Received message {payload} on topic '{topic}'")
         if not await self.cache.hlen(topic):
-            await self.logger.info(f"No datapoints found for topic {topic} in cache, asking Postgres...")
+            await self.logger.info(
+                f"No datapoints found for topic {topic} in cache, asking Postgres..."
+            )
             async with self.conn.transaction():
                 datapoints = await self.get_datapoints_by_topic(topic)
                 if not datapoints:
-                    await self.logger.info(f"No datapoints found for topic {topic}, ignoring message...")
+                    await self.logger.info(
+                        f"No datapoints found for topic {topic}, ignoring message..."
+                    )
                     return
                 await self.logger.info(
                     f"Succesfully retrieved datapoints for topic {topic} from Postgres: {datapoints}, adding to cache..."
@@ -214,7 +215,9 @@ class MqttGateway(Client):
                         json.dumps(datapoint),
                     )
         datapoints = await self.cache.hgetall(topic)
-        await self.logger.info(f"Found the following datapoints for topic {topic}: {datapoints}")
+        await self.logger.info(
+            f"Found the following datapoints for topic {topic}: {datapoints}"
+        )
 
         tasks = []
         for datapoint in datapoints.values():
@@ -240,19 +243,27 @@ class MqttGateway(Client):
                     "value": data[0].value,
                 }
             }  # type automatically changed to Text, change later?
-        try:
-            await self.s.patch(
-                f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
-                json=attr_data,
-            )
+
+            try:
+                await self.s.patch(
+                    f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                    json=attr_data,
+                    headers={"Content-Type": "application/json",
+                             "fiware-service": "gateway",
+                             "fiware-servicepath": "/gateway"},
+                )
+            except Exception as e:
+                await self.logger.error(f"Error sending data to Orion Context Broker: {e}")
+                return
+
             await self.logger.info(
                 f"Successfully sent data {attr_data} to Orion Context Broker for entity {datapoint['entity_id']}"
             )
-        except Exception as e:
-            await self.logger.error(f"Error sending data to Orion Context Broker: {e}")
-
-
-
+        else:
+            await self.logger.warn(
+                f"Data not found for datapoint {datapoint['object_id']}, ignoring message..."
+            )
+        
     async def mqtt_listener(self, client: Client) -> None:
         """
         Listens to MQTT for new messages on subscribed topics. When a message is received, the on_message callback function is called.

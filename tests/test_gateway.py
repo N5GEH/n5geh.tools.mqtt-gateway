@@ -13,18 +13,30 @@ from pydantic import BaseModel
 from uvicorn import Config, Server
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
+from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 
-from plots.plots import plot_message_loss, plot_percentage_loss, plot_latency
+
+from plots.plots import plot_latency, plot_message_loss, plot_percentage_loss
+from utils.utils import generate_entity, generate_payload, register_device, register_entity, generate_subscription
+import aiohttp
 import sys
 from collections import defaultdict
+from uuid import uuid4
+from filip.models.base import FiwareHeader
+from jsonpath_ng import parse as parse_jsonpath
+
+
+GATEWAY_URL = "http://localhost:8000"
+
+FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
 
 mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
-max_clients = 10
-initial_clients = 5
-client_step = 2
-creation_interval = 5
+max_clients = 500
+initial_clients = 50
+client_step = 50
+creation_interval = 30
 
 stage_count = max_clients // client_step
 messages_sent = [0] * stage_count
@@ -37,67 +49,29 @@ stage = 0
 last_message_received = asyncio.Event()
 generate_messages = asyncio.Event()
 
-class Metadata(BaseModel):
-    type: str
-    value: str
 
-
-class Attribute(BaseModel):
-    type: str
-    value: str
-    metadata: dict[str, Metadata]
-
-
-class Entity(BaseModel):
-    id: str
-    type: str
-    temperature: Attribute
-    humidity: Attribute
-    pressure: Attribute
-    co2: Attribute
-    timestamp: Attribute
-
-
-class Notification(BaseModel):
-    subscriptionId: str
-    data: List[Entity]
-
-
-async def generate_subscription() -> int:
+async def register_datapoint(session: aiohttp.ClientSession, entity_id: str, entity_type: str, attribute_name: str) -> None:
     """
-    Generate a subscription for the test/latency topic. This is used to test the latency of the Orion Context Broker.
-    The idea is to generate a subscription for the topic and then publish a message to the topic. The subscription should
-    then be triggered and the message should be forwarded to the specified endpoint. We can then measure the latency
-    between the publishing of the message and the reception of the message at the endpoint.
+    Register a new datapoint for the given entity in the gateway using the API.
     """
-    subscription = {
-        "description": "Latency test subscription",
-        "subject": {
-            "entities": [{"id": "TestFacility", "type": "Room"}],
-            "condition": {
-                "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"]
-            },
-        },
-        "notification": {
-            # "http": {"url": "http://host.docker.internal:8001/latency/notification"},
-            "mqtt": {
-                "url": "mqtt://host.docker.internal:1883",
-                "qos": 0,
-                "topic": "test/timestamp"
-            },
-            "attrs": ["temperature", "humidity", "pressure", "co2", "timestamp"],
-            "metadata": ["dateCreated", "dateModified"],
-        },
-        "expires": "2040-01-01T14:00:00.00Z",
-    }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:1026/v2/subscriptions",
-            json=subscription,
-            headers={"Content-Type": "application/json"},
-        )
-        return response.status_code
 
+    await session.post(f"{GATEWAY_URL}/data", json={
+        "object_id": str(uuid4()),
+        "jsonpath": f"$..{attribute_name}",
+        "topic": f"test/{entity_id}",
+        "description": "Test",
+        "entity_id": entity_id,
+        "entity_type": entity_type,
+        "attribute_name": attribute_name,
+        "matchDatapoint": True
+    })
+
+async def clear_gateway() -> None:
+    """
+    Clear all datapoints from the gateway.
+    """
+    async with aiohttp.ClientSession() as session:
+        await session.delete(f"{GATEWAY_URL}/data")
 
 async def receive_mqtt_notification() -> None:
     """
@@ -110,84 +84,15 @@ async def receive_mqtt_notification() -> None:
         await client.subscribe("test/timestamp")
         async with client.messages() as messages:
             async for message in messages:
-                print("Received message")
                 messages_received[stage] += 1
                 last_message_received.set()
-                times = time.time()
                 payload = json.loads(message.payload)
-                print(payload)
-                payload_timestamp = float(payload["data"][0]["humidity"]["value"])
+                payload_timestamp = parse_jsonpath("$..value").find(payload)[0].value
                 date_modified = parse(
-                    payload["data"][0]["humidity"]["metadata"]["dateModified"]["value"]
+                    parse_jsonpath("$..dateModified.value").find(payload)[0].value
                 ).timestamp()
-                print(f"Payload timestamp: {payload_timestamp}")
-                print(f"Date modified: {date_modified}")
-                print(f"Time: {times}")
                 latency = (date_modified - payload_timestamp) * 1000
                 latencies[stage].append(latency)
-                print(f"Latency: {latency:.3f} ms (MQTT)")
-
-
-async def start_server() -> None:
-    """
-    Start the FastAPI server that will receive the notifications from the Orion Context Broker.
-    """
-    app = FastAPI()
-
-    @app.post("/latency/notification")
-    async def receive_http_notification(notification: Notification) -> dict:
-        """
-        Receive a notification from the Orion Context Broker and calculate the latency.
-        This function is called whenever a notification is received from the Orion Context Broker.
-        The notification contains the payload that was published to the topic, as well as the metadata of the payload
-        which contains the timestamp of the payload. We can then calculate the latency by subtracting the timestamp of the payload
-        from the current timestamp. We iterate over all attributes of the payload and pick the one with the latest timestamp because
-        this is the one that was published last and therefore the one that triggered the notification.
-
-        Args:
-            notification (Notification): The notification that was received from the Orion Context Broker.
-            For structure, see the pydantic models above.
-
-        Returns:
-            dict: A dictionary containing the latency in seconds (perhaps change later)
-        """
-        # Get the current time
-        current_timestamp = time.time()
-        payload_timestamp = float(notification.data[0].timestamp.value)
-
-        # Calculate the latency
-        latency = (current_timestamp - payload_timestamp) * 1000
-        print(f"Latency: {latency:.3f} ms (HTTP)")
-        return {"latency": latency}
-
-    config = Config(app=app, host="0.0.0.0", port=8001)
-    server = Server(config=config)
-    await server.serve()
-
-
-async def generate_random_string(length: int) -> str:
-    """
-    Generate a random string of the specified length. This is used to generate random attribute names
-    that are not already in use by the Orion Context Broker as we need to see whether the matching works properly.
-    This is a very naive implementation, but it is sufficient for our purposes and makes use of the ascii table.
-    At the end of the day, we just need to generate an 'attribute name' that is not registered in the Context Broker entity.
-    """
-    return "".join([chr(int(uniform(97, 122))) for _ in range(length)])
-
-
-async def generate_payload() -> str:
-    """
-    Generate a random payload for the test/latency topic. The payload needs to contain a 'real' attribute (the one that exists in the Context Broker)
-    and a 'fake' attribute (generated by generate_random_string) to test whether the matching works properly. The 'real' attribute will be picked at random
-    from the list of attributes that are already in use by the Context Broker. Also, we need to add a timestamp to the payload so that we can calculate the latency.
-    """
-    attributes = ["temperature", "humidity", "pressure", "co2", "timestamp"]
-    real_attribute = attributes[int(uniform(0, len(attributes)))]
-    fake_attribute = await generate_random_string(10)
-    messages_sent[stage] += 1
-    return json.dumps(
-        {fake_attribute: round(uniform(0, 100), 2), real_attribute: time.time()}
-    )
 
 
 async def generate_client() -> None:
@@ -198,11 +103,17 @@ async def generate_client() -> None:
     properly, while the timestamp is used to calculate the latency.
     """
     try:
+        device_id, entity_id, entity_type, attribute_name = await generate_entity()
+        async with aiohttp.ClientSession() as session:
+            await register_datapoint(session, entity_id, entity_type, attribute_name)
+            await register_entity(session, entity_id, entity_type, attribute_name)
+            await generate_subscription(session, entity_id, entity_type, attribute_name)
         async with MQTTClient(mqtt_broker_address) as client:
             await client.connect()
             while True:
                 await generate_messages.wait()
-                await client.publish("test/latency", await generate_payload())
+                await client.publish(f"test/{entity_id}", await generate_payload(attribute_name=attribute_name))
+                messages_sent[stage] += 1
                 await asyncio.sleep(1)
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -250,6 +161,8 @@ async def generate_clients(
         plot_message_loss(messages_sent, messages_received, messages_per_second)
         plot_percentage_loss(messages_sent, messages_received, messages_per_second)
         plot_latency(messages_per_second, latencies)
+        await clear_gateway()
+        clear_context_broker("http://localhost:1026", FIWARE_HEADER)
 
 async def wait_for_last_stage_message(wait_time: int = 5):
     """
@@ -265,24 +178,6 @@ async def wait_for_last_stage_message(wait_time: int = 5):
             break
 
 
-async def wait_for_last_message():
-    """
-    Wait for the last message to be received. If no message is received in the last 30 seconds, plot the message loss and exit.
-    """
-    global last_message_received
-    while True:
-        await last_message_received.wait()
-        await asyncio.sleep(30)
-        if last_message_received.is_set():
-            last_message_received.clear()
-            print("No messages received in the last 30 seconds. Plotting and exiting...")
-            plot_message_loss(messages_sent, messages_received, stage)
-            plot_percentage_loss(messages_sent, messages_received, stage)
-            plot_latency(messages_per_second, latencies)
-            break
-        else:
-            last_message_received.clear()
-
 async def main():
     """
     Main function that starts the FastAPI server and generates the clients.
@@ -290,17 +185,17 @@ async def main():
     Otherwise due to the async nature of the code, the code would continue running and the server would not be closed.
     """
     try:
-        server = asyncio.create_task(start_server())
+        clear_context_broker("http://localhost:1026", FIWARE_HEADER)
         test_clients = asyncio.create_task(
             generate_clients(initial_clients, client_step, creation_interval)
         )
         sub_listen = asyncio.create_task(receive_mqtt_notification())
-        await asyncio.gather(server, test_clients, sub_listen)
+        await asyncio.gather(test_clients, sub_listen)
     except KeyboardInterrupt:
         print("Received exit signal. Shutting down...")
         for task in asyncio.all_tasks():
             task.cancel()
-        await server.aclose()  # Close the FastAPI server
+        await clear_gateway()
         print("Shutdown complete.")
         sys.exit(0)
 
