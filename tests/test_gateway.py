@@ -33,10 +33,10 @@ FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
 mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
-max_clients = 500
-initial_clients = 50
-client_step = 50
-creation_interval = 30
+max_clients = 10
+initial_clients = 1
+client_step = 1
+creation_interval = 5
 
 stage_count = max_clients // client_step
 messages_sent = [0] * stage_count
@@ -85,6 +85,7 @@ async def receive_mqtt_notification() -> None:
         async with client.messages() as messages:
             async for message in messages:
                 messages_received[stage] += 1
+                print(f"Received message {messages_received[stage]}")
                 last_message_received.set()
                 payload = json.loads(message.payload)
                 payload_timestamp = parse_jsonpath("$..value").find(payload)[0].value
@@ -186,6 +187,7 @@ async def main():
     """
     try:
         clear_context_broker("http://localhost:1026", FIWARE_HEADER)
+        await clear_gateway()
         test_clients = asyncio.create_task(
             generate_clients(initial_clients, client_step, creation_interval)
         )

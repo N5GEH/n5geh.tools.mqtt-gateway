@@ -10,7 +10,7 @@ from typing import List
 
 import async_timeout
 import asyncpg
-import httpx
+import aiohttp
 import paho.mqtt.client as mqtt
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
@@ -51,15 +51,10 @@ class MqttGateway(Client):
 
     def __init__(self):
         super().__init__(hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5)
-        self.s = httpx.AsyncClient()
         # Create gateway device
-        self.gateway_device = Device(
-            device_id="gateway:001",
-            entity_name="ngsi-ld:urn:Gateway:001",
-            entity_type="Gateway",
-            protocol="IoTA-JSON",
-        )
-        self.orion = ContextBrokerClient(url=orion, headers=header)
+
+        self.queue = asyncio.Queue()  # Queue for storing incoming messages
+        self.workers = []  # List of worker tasks
         self.cache = aioredis.from_url(
             url=f"{REDIS_URL}/0"
         )  # Cache for storing datapoints with an LRU eviction policy (least recently used)
@@ -69,6 +64,84 @@ class MqttGateway(Client):
         self.conn = None  # Initialized in run()
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
+
+
+    async def worker(self, client: Client) -> None:
+        """
+        Worker task that processes incoming messages from the queue.
+
+        Args:
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+        """
+        while True:
+            # Wait for a message from the queue
+            try:
+                topic, payload = await asyncio.wait_for(self.queue.get(), timeout=1)
+            except asyncio.TimeoutError:
+                continue
+            # Process the message
+            await self.process_message(topic, payload, client)
+            self.queue.task_done()
+
+    async def start_workers(self, client: Client) -> None:
+        """
+        Starts the worker tasks.
+
+        Args:
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+        """
+        workers = [asyncio.create_task(self.worker(client)) for _ in range(12)]
+        await asyncio.gather(*workers)
+    
+    async def process_message(self, topic: str, payload: str, client: Client) -> None:
+        """
+        Processes a single message.
+
+        Args:
+            topic (str): The topic of the message.
+            payload (str): The payload of the message.
+            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+        """
+        # Get all datapoints for the topic from the cache
+        datapoints = await self.cache.hgetall(topic)
+        # Iterate over all datapoints
+        for datapoint in datapoints.values():
+            # Parse the jsonpath
+            jsonpath = parse(json.loads(datapoint)["jsonpath"])
+            # Extract the value from the payload using the jsonpath
+            value = [match.value for match in jsonpath.find(json.loads(payload))]
+            # If the value is not empty, send it to the Orion Context Broker
+            if value:
+                await self.send_to_orion(
+                    json.loads(datapoint), value[0], client
+                )
+    
+    async def send_to_orion(
+        self, datapoint: dict, value: str, client: Client) -> None:
+        """
+        Sends a value to the Orion Context Broker.
+
+        """
+        # Create the payload
+        payload = {
+            datapoint["attribute_name"]: {
+                "type": "Number",
+                "value": value,
+            }
+        }
+        # Send the payload to the Orion Context Broker
+        async with aiohttp.ClientSession() as session:
+            await session.patch(
+                url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                json=payload,
+                headers={
+                    "fiware-service": header.service,
+                    "fiware-Servicepath": header.service_path,
+                }
+            )
+
+    
+
 
     async def add_datapoint(
         self,
@@ -233,6 +306,7 @@ class MqttGateway(Client):
 
     async def process_datapoint(self, datapoint, payload):
         data = parse(datapoint["jsonpath"]).find(payload)
+        self.logger.info(f"Data: {data}, time passed since message sent: {time.time() - float(data[0].value)}")
         if (
             data
             and datapoint["entity_id"]
@@ -250,8 +324,8 @@ class MqttGateway(Client):
                     f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
                     json=attr_data,
                     headers={"Content-Type": "application/json",
-                             #"fiware-service": "gateway",
-                             #"fiware-servicepath": "/gateway"
+                             "fiware-service": "gateway",
+                             "fiware-servicepath": "/gateway"
                              },
                 )
             except Exception as e:
@@ -283,9 +357,8 @@ class MqttGateway(Client):
             print(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
-                payload = message.payload.decode()
-                topic = message.topic
-                await self.on_message(topic=topic, payload=payload)
+                self.queue.put_nowait((str(message.topic), message.payload))
+                
 
     async def redis_listener(self, client: Client) -> None:
         """
@@ -395,13 +468,18 @@ class MqttGateway(Client):
         """
         await self.cache.flushall()
         self.conn = await asyncpg.connect(DATABASE_URL)
+        self.s = aiohttp.ClientSession()
         while True:
             reconnect_interval = 5
             try:
                 async with Client(
                     hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5
                 ) as client:
-                    tasks = [self.mqtt_listener(client), self.redis_listener(client)]
+                    tasks = [
+                        asyncio.create_task(self.mqtt_listener(client)),
+                        asyncio.create_task(self.redis_listener(client)),
+                        asyncio.create_task(self.start_workers(client)),
+                    ]
                     await asyncio.gather(*tasks)
             except MqttError as error:
                 print(
