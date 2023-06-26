@@ -215,8 +215,9 @@ class MqttGateway(Client):
                         json.dumps(datapoint),
                     )
         datapoints = await self.cache.hgetall(topic)
+        redis_time = time.time()
         await self.logger.info(
-            f"Found the following datapoints for topic {topic}: {datapoints}"
+            f"Found the following datapoints for topic {topic}: {datapoints} in {redis_time - start_time} seconds"
         )
 
         tasks = []
@@ -227,7 +228,7 @@ class MqttGateway(Client):
 
         await asyncio.gather(*tasks)
         await self.logger.info(
-            f"Finished processing datapoint {datapoint['object_id']} in {time.time() - start_time} seconds"
+            f"Finished processing datapoint {datapoint['object_id']} in {time.time() - redis_time} seconds"
         )
 
     async def process_datapoint(self, datapoint, payload):
@@ -249,8 +250,9 @@ class MqttGateway(Client):
                     f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
                     json=attr_data,
                     headers={"Content-Type": "application/json",
-                             "fiware-service": "gateway",
-                             "fiware-servicepath": "/gateway"},
+                             #"fiware-service": "gateway",
+                             #"fiware-servicepath": "/gateway"
+                             },
                 )
             except Exception as e:
                 await self.logger.error(f"Error sending data to Orion Context Broker: {e}")
