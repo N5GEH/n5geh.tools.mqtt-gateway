@@ -24,6 +24,7 @@ from collections import defaultdict
 from uuid import uuid4
 from filip.models.base import FiwareHeader
 from jsonpath_ng import parse as parse_jsonpath
+import threading
 
 
 GATEWAY_URL = "http://localhost:8000"
@@ -34,9 +35,9 @@ mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
 max_clients = 10
-initial_clients = 1
-client_step = 1
-creation_interval = 5
+initial_clients = 10
+client_step = 10
+creation_interval = 10
 
 stage_count = max_clients // client_step
 messages_sent = [0] * stage_count
@@ -113,9 +114,9 @@ async def generate_client() -> None:
             await client.connect()
             while True:
                 await generate_messages.wait()
+                await asyncio.sleep(1)
                 await client.publish(f"test/{entity_id}", await generate_payload(attribute_name=attribute_name))
                 messages_sent[stage] += 1
-                await asyncio.sleep(1)
     except Exception as e:
         print(f"An error occurred: {e}")
 

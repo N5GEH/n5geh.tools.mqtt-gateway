@@ -20,6 +20,8 @@ from filip.models.base import FiwareHeader
 from filip.models.ngsi_v2.iot import Device
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
+from typing import Tuple
+import aioredlock
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
@@ -50,20 +52,34 @@ class MqttGateway(Client):
     """
 
     def __init__(self):
-        super().__init__(hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5)
+        super().__init__(hostname=MQTT_HOST)
         # Create gateway device
-
-        self.queue = asyncio.Queue()  # Queue for storing incoming messages
+        self.queue = asyncio.PriorityQueue()  # Queue for storing incoming messages
         self.workers = []  # List of worker tasks
         self.cache = aioredis.from_url(
             url=f"{REDIS_URL}/0"
         )  # Cache for storing datapoints with an LRU eviction policy (least recently used)
         self.notifier = aioredis.from_url(
             url=f"{REDIS_URL}/1"
-        ).pubsub()  # PubSub channel for notifying the API about new data
+        ).pubsub() # PubSub channel for notifying the API about new data
         self.conn = None  # Initialized in run()
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
+        self.lock = self.cache.lock("leader", timeout=60)
+
+    
+    async def assign_leader(self):
+        """
+        Assigns a leader to the gateway. The leader is responsible for processing incoming messages from the queue.
+        """
+        while True:
+            try:
+                async with self.lock:
+                    await self.logger.info("I am the leader")
+                    await self.start_workers(self)
+            except aioredlock.LockError:
+                await self.logger.info("I am not the leader")
+            await asyncio.sleep(60)
 
 
     async def worker(self, client: Client) -> None:
@@ -73,15 +89,22 @@ class MqttGateway(Client):
         Args:
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
-        while True:
-            # Wait for a message from the queue
-            try:
-                topic, payload = await asyncio.wait_for(self.queue.get(), timeout=1)
-            except asyncio.TimeoutError:
-                continue
-            # Process the message
-            await self.process_message(topic, payload, client)
-            self.queue.task_done()
+        async with aiohttp.ClientSession() as worker_session:
+            async with Client(MQTT_HOST) as worker_client:
+                while True:
+                    # Wait for a message from the queue
+                    try:
+                        _, source, *message = await self.queue.get()
+                        if source == "redis":
+                            await self.process_redis_message(*message, client=client)
+                        elif source == "mqtt":
+                            await self.process_mqtt_message(*message, worker_client, worker_session)
+                        else:
+                            self.logger.error(f"Unknown source: {source}")
+                        self.queue.task_done()
+                    except Exception as e:
+                        self.logger.error(e)
+                        continue
 
     async def start_workers(self, client: Client) -> None:
         """
@@ -92,254 +115,91 @@ class MqttGateway(Client):
         """
         workers = [asyncio.create_task(self.worker(client)) for _ in range(12)]
         await asyncio.gather(*workers)
-    
-    async def process_message(self, topic: str, payload: str, client: Client) -> None:
+
+    async def process_redis_message(self, message: Tuple[str, str], client: Client) -> None:
         """
-        Processes a single message.
+        Processes a single Redis message.
 
         Args:
-            topic (str): The topic of the message.
-            payload (str): The payload of the message.
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+            message (Tuple[str, str, Client]): A tuple containing the command, the topic, and the MQTT client used by the gateway. 
         """
+        command, topic = message
+        command = command.decode('utf-8')
+        topic = topic.decode('utf-8')
+
+        try:
+            print(f"Processing command: {command} {topic}")
+            if command == "subscribe":
+                await client.subscribe(topic)
+                self.logger.info(f"Subscribed to {topic}")
+            elif command == "unsubscribe":
+                await client.unsubscribe(topic)
+                self.logger.info(f"Unsubscribed from {topic}")
+            else:
+                self.logger.error(f"Unknown command: {command}")
+        except Exception as e:
+            self.logger.error(e)
+        finally:
+            self.logger.info(f"Done processing command: {command} {topic}")
+
+
+    async def process_mqtt_message(self, message: Tuple[str, str], client: Client, session: aiohttp.ClientSession) -> None:
+        """
+        Processes a single MQTT message.
+
+        Args:
+            message (Tuple[str, str, Client]): A tuple containing the topic, the payload, and the MQTT client used by the gateway. 
+        """
+        topic, payload = message
+
         # Get all datapoints for the topic from the cache
-        datapoints = await self.cache.hgetall(topic)
-        # Iterate over all datapoints
-        for datapoint in datapoints.values():
-            # Parse the jsonpath
-            jsonpath = parse(json.loads(datapoint)["jsonpath"])
-            # Extract the value from the payload using the jsonpath
-            value = [match.value for match in jsonpath.find(json.loads(payload))]
-            # If the value is not empty, send it to the Orion Context Broker
-            if value:
-                await self.send_to_orion(
-                    json.loads(datapoint), value[0], client
-                )
-    
-    async def send_to_orion(
-        self, datapoint: dict, value: str, client: Client) -> None:
-        """
-        Sends a value to the Orion Context Broker.
-
-        """
-        # Create the payload
-        payload = {
-            datapoint["attribute_name"]: {
-                "type": "Number",
-                "value": value,
-            }
-        }
-        # Send the payload to the Orion Context Broker
-        async with aiohttp.ClientSession() as session:
-            await session.patch(
-                url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
-                json=payload,
-                headers={
-                    "fiware-service": header.service,
-                    "fiware-Servicepath": header.service_path,
-                }
-            )
-
-    
-
-
-    async def add_datapoint(
-        self,
-        object_id: str,
-        jsonpath: str,
-        topic: str,
-        entity_id: str,
-        entity_type: str,
-        attribute_name: str,
-        subscribe: bool,
-        client: Client,
-    ) -> None:
-        """
-        Adds a new datapoint to the gateway.
-
-        Args:
-            object_id (str): The object ID of the datapoint.
-            jsonpath (str): The jsonpath of the attribute.
-            topic (str): The topic to which the datapoint should be added.
-            entity_id (str): The entity ID of the datapoint in the Orion Context Broker.
-            entity_type (str): The entity type of the datapoint in the Orion Context Broker.
-            attribute_name (str): The attribute name of the datapoint in the Orion Context Broker.
-            subscribe (bool): Whether the gateway should subscribe to the topic.
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
-        """
-        print(
-            f"Adding datapoint {object_id} with jsonpath {jsonpath} and topic {topic} to the gateway"
-        )
-        await client.subscribe(topic) if subscribe else None
-        await self.cache.hset(
-            topic,
-            object_id,
-            json.dumps(
-                {
-                    "object_id": object_id,
-                    "jsonpath": jsonpath,
-                    "entity_id": entity_id,
-                    "entity_type": entity_type,
-                    "attribute_name": attribute_name,
-                }
-            ),
-        )
-        print(f"Cache updated, now contains {await self.cache.hgetall(topic)}")
-
-    async def remove_datapoint(
-        self,
-        object_id: str,
-        jsonpath: str,
-        topic: str,
-        entity_id: str,
-        entity_type: str,
-        attribute_name: str,
-        unsubscribe: bool,
-        client: Client,
-    ) -> None:
-        """
-        Removes a datapoint from the gateway.
-
-        Args:
-            object_id (str): The object ID of the datapoint.
-            jsonpath (str): The jsonpath of the attribute.
-            topic (str): The topic to which the datapoint should be added.
-            entity_id (str): The entity ID of the datapoint in the Orion Context Broker.
-            entity_type (str): The entity type of the datapoint in the Orion Context Broker.
-            attribute_name (str): The attribute name of the datapoint in the Orion Context Broker.
-            unsubscribe (bool): Whether the gateway should unsubscribe to the topic.
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
-        """
-        print(
-            f"Removing datapoint with jsonpath {jsonpath} and topic {topic} from the gateway"
-        )
-        await client.unsubscribe(topic) if unsubscribe else None
-        await self.cache.hdel(topic, object_id)
-        print(f"Cache updated, now contains {await self.cache.hgetall(topic)}")
-        await self.cache.delete(topic) if not await self.cache.hlen(
-            topic
-        ) else None  # Delete topic if it is empty
-
-    async def update_datapoint(
-        self, object_id: str, entity_id: str, entity_type: str, attribute_name: str
-    ) -> None:
-        """
-        Updates a datapoint in the gateway.
-
-        Args:
-            object_id (str): The object ID of the datapoint.
-            entity_id (str): The entity ID of the datapoint in the Orion Context Broker.
-            entity_type (str): The entity type of the datapoint in the Orion Context Broker.
-            attribute_name (str): The attribute name of the datapoint in the Orion Context Broker.
-        """
-        print(f"Updating datapoint with object_id {object_id}...")
-        data = json.loads(await self.cache.get(object_id))
-        if data["topic"]:
-            await self.cache.hset(
-                data["topic"],
-                object_id,
-                json.dumps(
-                    {
-                        "object_id": object_id,
-                        "jsonpath": data["jsonpath"],
-                        "entity_id": entity_id,
-                        "entity_type": entity_type,
-                        "attribute_name": attribute_name,
-                    }
-                ),
-            )
-            print(
-                f"Cache updated, now contains {await self.cache.hgetall(data['topic'])}"
-            )
-
-    async def on_message(self, topic: Topic, payload: str) -> None:
-        """
-        Callback function that processes MQTT messages.
-        It is called whenever a message is received on a subscribed topic.
-        Queries the cache for the datapoint associated with the topic containing the jsonpath of the attribute.
-        If for some reason the datapoint is not found in the cache, it is queried from the Postgres database.
-        If a datapoint is found, the jsonpath is used to extract the value from the payload, which is then sent to the Orion Context Broker.
-
-        Args:
-            topic (Topic): The topic on which the message was received. The Topic object is from the asyncio_mqtt library.
-            payload (str): The payload of the message.
-        """
-        start_time = time.time()
-        topic = str(topic)
-        await self.logger.info(f"Received message {payload} on topic '{topic}'")
+        # If the topic is not in the cache, ask Postgres
         if not await self.cache.hlen(topic):
             await self.logger.info(
                 f"No datapoints found for topic {topic} in cache, asking Postgres..."
             )
-            async with self.conn.transaction():
-                datapoints = await self.get_datapoints_by_topic(topic)
-                if not datapoints:
-                    await self.logger.info(
-                        f"No datapoints found for topic {topic}, ignoring message..."
-                    )
-                    return
-                await self.logger.info(
-                    f"Succesfully retrieved datapoints for topic {topic} from Postgres: {datapoints}, adding to cache..."
-                )
-                for datapoint in datapoints:
-                    await self.cache.hset(
-                        topic,
-                        datapoint["object_id"],
-                        json.dumps(datapoint),
-                    )
-        datapoints = await self.cache.hgetall(topic)
-        redis_time = time.time()
-        await self.logger.info(
-            f"Found the following datapoints for topic {topic}: {datapoints} in {redis_time - start_time} seconds"
-        )
-
-        tasks = []
-        for datapoint in datapoints.values():
-            datapoint = json.loads(datapoint)
-            await self.logger.info(f"Processing datapoint {datapoint['object_id']}...")
-            tasks.append(self.process_datapoint(datapoint, json.loads(payload)))
-
-        await asyncio.gather(*tasks)
-        await self.logger.info(
-            f"Finished processing datapoint {datapoint['object_id']} in {time.time() - redis_time} seconds"
-        )
-
-    async def process_datapoint(self, datapoint, payload):
-        data = parse(datapoint["jsonpath"]).find(payload)
-        self.logger.info(f"Data: {data}, time passed since message sent: {time.time() - float(data[0].value)}")
-        if (
-            data
-            and datapoint["entity_id"]
-            and datapoint["entity_type"]
-            and datapoint["attribute_name"]
-        ):
-            attr_data = {
-                datapoint["attribute_name"]: {
-                    "value": data[0].value,
-                }
-            }  # type automatically changed to Text, change later?
-
-            try:
-                await self.s.patch(
-                    f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
-                    json=attr_data,
-                    headers={"Content-Type": "application/json",
-                             "fiware-service": "gateway",
-                             "fiware-servicepath": "/gateway"
-                             },
-                )
-            except Exception as e:
-                await self.logger.error(f"Error sending data to Orion Context Broker: {e}")
+            datapoints = await self.get_datapoints_by_topic(topic)
+            if not datapoints:
+                await self.logger.info(f"No datapoints found for topic {topic} in Postgres")
                 return
-
-            await self.logger.info(
-                f"Successfully sent data {attr_data} to Orion Context Broker for entity {datapoint['entity_id']}"
-            )
-        else:
-            await self.logger.warn(
-                f"Data not found for datapoint {datapoint['object_id']}, ignoring message..."
-            )
+            await self.logger.info(f"Got {len(datapoints)} datapoints from Postgres")
+            # Add the datapoints to the cache
+            for datapoint in datapoints:
+                await self.cache.hset(
+                    topic, 
+                    datapoint["object_id"],
+                    json.dumps(datapoint)
+                )
         
+        datapoints = await self.cache.hgetall(topic)
+        for datapoint in datapoints.values():
+            datapoint = json.loads(datapoint.decode("utf-8"))
+            # Get the value from the payload using jsonpath
+            value = parse(datapoint["jsonpath"]).find(json.loads(payload.decode("utf-8")))[0].value
+            if value:
+                payload = {
+                    datapoint["attribute_name"]: {
+                        "type": "Number",
+                        "value": value,
+                }
+                }
+                # Send the payload to the Orion Context Broker
+                try:
+                    await session.patch(
+                    url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                        json=payload,
+                        headers={
+                            "fiware-service": header.service,
+                            "fiware-servicepath": header.service_path,
+                        }
+                    )
+                    await self.logger.info(f"Sent {payload} to Orion Context Broker")
+                except Exception as e:
+                    await self.logger.error(e)
+                    continue
+
+
+
     async def mqtt_listener(self, client: Client) -> None:
         """
         Listens to MQTT for new messages on subscribed topics. When a message is received, the on_message callback function is called.
@@ -350,14 +210,15 @@ class MqttGateway(Client):
         Args:
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
+        print("Listening to MQTT...")
         topics = await self.get_unique_topics()
+        print(f"Subscribing to {len(topics)} topics... ({topics})")
         for topic in topics:
-            print(f"Subscribing to topic {topic}...")
             await client.subscribe(topic)
             print(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
-                self.queue.put_nowait((str(message.topic), message.payload))
+                self.queue.put_nowait((1, "mqtt", (str(message.topic), message.payload)))
                 
 
     async def redis_listener(self, client: Client) -> None:
@@ -369,9 +230,10 @@ class MqttGateway(Client):
         Args:
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
-        await self.notifier.subscribe("add_datapoint")
-        await self.notifier.subscribe("remove_datapoint")
-        await self.notifier.subscribe("update_datapoint")
+        print("Listening to Redis...")
+        await self.notifier.subscribe("subscribe")
+        await self.notifier.subscribe("unsubscribe")
+        print("Subscribed to subscribe and unsubscribe channels")
         while True:
             try:
                 async with async_timeout.timeout(1):
@@ -379,58 +241,13 @@ class MqttGateway(Client):
                         ignore_subscribe_messages=True
                     )
                     if message is not None:
-                        print(f"Received message {message}")
-                        await self.on_redis_message(
-                            client=client,
-                            channel=message["channel"].decode(),
-                            message=message["data"].decode(),
-                        )
-                    await asyncio.sleep(0.01)
+                        print(f"Received message {message} on channel {message['channel']}")
+                        lock = self.cache.lock(message["channel"], timeout=1)
+                        async with lock:
+                            self.queue.put_nowait((0, "redis", (message["channel"], message["data"])))
             except asyncio.TimeoutError:
                 pass
 
-    async def on_redis_message(
-        self, client: Client, channel: str, message: str
-    ) -> None:
-        """
-        Callback function that processes Redis messages.
-        It is called whenever a new topic is added or removed from the database.
-
-        Args:
-            channel (str): The channel that the message was published on.
-            message (str): The message that was published.
-        """
-        print(f"Received message on channel '{channel}' with payload '{message}'")
-        data = json.loads(message)
-        if channel == "add_datapoint":
-            await self.add_datapoint(
-                object_id=data["object_id"],
-                jsonpath=data["jsonpath"],
-                topic=data["topic"],
-                entity_id=data["entity_id"],
-                entity_type=data["entity_type"],
-                attribute_name=data["attribute_name"],
-                subscribe=data["subscribe"],
-                client=client,
-            )
-        elif channel == "remove_datapoint":
-            await self.remove_datapoint(
-                object_id=data["object_id"],
-                jsonpath=data["jsonpath"],
-                topic=data["topic"],
-                entity_id=data["entity_id"],
-                entity_type=data["entity_type"],
-                attribute_name=data["attribute_name"],
-                subscribe=data["subscribe"],
-                client=client,
-            )
-        elif channel == "update_datapoint":
-            await self.update_datapoint(
-                object_id=data["object_id"],
-                entity_id=data["entity_id"],
-                entity_type=data["entity_type"],
-                attribute_name=data["attribute_name"],
-            )
 
     # The following methods are used to interact with the Postgres database.
     async def get_datapoints(self):
@@ -473,8 +290,7 @@ class MqttGateway(Client):
             reconnect_interval = 5
             try:
                 async with Client(
-                    hostname=MQTT_HOST, client_id="gateway", protocol=mqtt.MQTTv5
-                ) as client:
+                    hostname=MQTT_HOST) as client:
                     tasks = [
                         asyncio.create_task(self.mqtt_listener(client)),
                         asyncio.create_task(self.redis_listener(client)),

@@ -188,7 +188,7 @@ async def add_datapoint(
         async with conn.transaction():
             # check if there is already a device subscribed to the same topic
             # if so, the gateway will not subscribe to the topic again
-            subscribe = await conn.fetchrow(
+            subscribed = await conn.fetchrow(
                 """SELECT object_id FROM datapoints WHERE topic=$1 AND object_id!=$2""",
                 datapoint.topic,
                 datapoint.object_id,
@@ -211,23 +211,29 @@ async def add_datapoint(
             json.dumps({"jsonpath": datapoint.jsonpath, "topic": datapoint.topic}),
         )
 
-        # publish a notification to the database to notify that a new datapoint has been added
-        await app.state.notifier.publish(
-            "add_datapoint",
+        await app.state.redis.hset(
+            datapoint.topic,
+            datapoint.object_id,
             json.dumps(
                 {
                     "object_id": datapoint.object_id,
                     "jsonpath": datapoint.jsonpath,
-                    "topic": datapoint.topic,
                     "entity_id": datapoint.entity_id,
                     "entity_type": datapoint.entity_type,
                     "attribute_name": datapoint.attribute_name,
-                    "subscribe": subscribe is None,
+                    "description": datapoint.description,
                 }
             ),
         )
 
-        return {**datapoint.dict(), "subscribe": subscribe is None}
+        # publish a notification to the database to notify that a new datapoint has been added
+        if not subscribed:
+            await app.state.notifier.publish(
+                "subscribe",
+                datapoint.topic
+            )
+
+        return {**datapoint.dict(), "subscribe": subscribed is None}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
@@ -259,23 +265,32 @@ async def update_datapoint(
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
     """
-    await conn.execute(
-        """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
-        datapoint.entity_id,
-        datapoint.entity_type,
-        datapoint.attribute_name,
-        datapoint.description,
-        object_id,
-    )
+    async with conn.transaction():
 
-    await app.state.notifier.publish(
-        "update_datapoint",
+        await conn.execute(
+            """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
+            datapoint.entity_id,
+            datapoint.entity_type,
+            datapoint.attribute_name,
+            datapoint.description,
+            object_id,
+        )
+
+        jsonpath = await conn.fetchval(
+            """SELECT jsonpath FROM datapoints WHERE object_id=$1""", object_id
+        )
+
+    await app.state.redis.hset(
+        datapoint.topic,
+        object_id,
         json.dumps(
             {
                 "object_id": object_id,
+                "jsonpath": jsonpath,
                 "entity_id": datapoint.entity_id,
                 "entity_type": datapoint.entity_type,
                 "attribute_name": datapoint.attribute_name,
+                "description": datapoint.description,
             }
         ),
     )
@@ -320,20 +335,13 @@ async def delete_datapoint(
             )
 
         await app.state.redis.delete(object_id)
-        await app.state.notifier.publish(
-            "delete_datapoint",
-            json.dumps(
-                {
-                    "object_id": object_id,
-                    "jsonpath": datapoint["jsonpath"],
-                    "topic": datapoint["topic"],
-                    "entity_id": datapoint["entity_id"],
-                    "entity_type": datapoint["entity_type"],
-                    "attribute_name": datapoint["attribute_name"],
-                    "unsubscribe": unsubscribe is None,
-                }
-            ),
-        )
+        await app.state.redis.hdel(datapoint["topic"], object_id)
+
+        if not unsubscribe:
+            await app.state.notifier.publish(
+                "unsubscribe",
+                datapoint["topic"]
+            )
         return None
     except Exception as e:
         print(e)
