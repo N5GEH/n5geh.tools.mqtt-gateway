@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import asyncpg
 import httpx
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -228,10 +229,7 @@ async def add_datapoint(
 
         # publish a notification to the database to notify that a new datapoint has been added
         if not subscribed:
-            await app.state.notifier.publish(
-                "subscribe",
-                datapoint.topic
-            )
+            await app.state.notifier.publish("subscribe", datapoint.topic)
 
         return {**datapoint.dict(), "subscribe": subscribed is None}
 
@@ -266,7 +264,6 @@ async def update_datapoint(
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
     """
     async with conn.transaction():
-
         await conn.execute(
             """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
             datapoint.entity_id,
@@ -338,14 +335,12 @@ async def delete_datapoint(
         await app.state.redis.hdel(datapoint["topic"], object_id)
 
         if not unsubscribe:
-            await app.state.notifier.publish(
-                "unsubscribe",
-                datapoint["topic"]
-            )
+            await app.state.notifier.publish("unsubscribe", datapoint["topic"])
         return None
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 @app.delete(
     "/data",
@@ -389,6 +384,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 @app.get(
     "/data/{object_id}/status",
@@ -491,3 +487,7 @@ async def get_redis_status():
         return True
     except:
         raise HTTPException(status_code=500, detail="Redis server is not reachable!")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

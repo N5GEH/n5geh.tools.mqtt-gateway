@@ -5,23 +5,17 @@ This module implements the MQTT IoT Gateway.
 import asyncio
 import json
 import os
-import time
-from typing import List
+from typing import List, Tuple
 
+import aiohttp
 import async_timeout
 import asyncpg
-import aiohttp
-import paho.mqtt.client as mqtt
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
-from asyncio_mqtt import Client, MqttError, Topic
-from filip.clients.ngsi_v2 import ContextBrokerClient
+from asyncio_mqtt import Client, MqttError
 from filip.models.base import FiwareHeader
-from filip.models.ngsi_v2.iot import Device
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
-from typing import Tuple
-import aioredlock
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
@@ -61,26 +55,10 @@ class MqttGateway(Client):
         )  # Cache for storing datapoints with an LRU eviction policy (least recently used)
         self.notifier = aioredis.from_url(
             url=f"{REDIS_URL}/1"
-        ).pubsub() # PubSub channel for notifying the API about new data
+        ).pubsub()  # PubSub channel for notifying the API about new data
         self.conn = None  # Initialized in run()
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
-        self.lock = self.cache.lock("leader", timeout=60)
-
-    
-    async def assign_leader(self):
-        """
-        Assigns a leader to the gateway. The leader is responsible for processing incoming messages from the queue.
-        """
-        while True:
-            try:
-                async with self.lock:
-                    await self.logger.info("I am the leader")
-                    await self.start_workers(self)
-            except aioredlock.LockError:
-                await self.logger.info("I am not the leader")
-            await asyncio.sleep(60)
-
 
     async def worker(self, client: Client) -> None:
         """
@@ -98,7 +76,9 @@ class MqttGateway(Client):
                         if source == "redis":
                             await self.process_redis_message(*message, client=client)
                         elif source == "mqtt":
-                            await self.process_mqtt_message(*message, worker_client, worker_session)
+                            await self.process_mqtt_message(
+                                *message, worker_client, worker_session
+                            )
                         else:
                             self.logger.error(f"Unknown source: {source}")
                         self.queue.task_done()
@@ -116,16 +96,18 @@ class MqttGateway(Client):
         workers = [asyncio.create_task(self.worker(client)) for _ in range(12)]
         await asyncio.gather(*workers)
 
-    async def process_redis_message(self, message: Tuple[str, str], client: Client) -> None:
+    async def process_redis_message(
+        self, message: Tuple[str, str], client: Client
+    ) -> None:
         """
         Processes a single Redis message.
 
         Args:
-            message (Tuple[str, str, Client]): A tuple containing the command, the topic, and the MQTT client used by the gateway. 
+            message (Tuple[str, str, Client]): A tuple containing the command, the topic, and the MQTT client used by the gateway.
         """
         command, topic = message
-        command = command.decode('utf-8')
-        topic = topic.decode('utf-8')
+        command = command.decode("utf-8")
+        topic = topic.decode("utf-8")
 
         try:
             print(f"Processing command: {command} {topic}")
@@ -142,13 +124,14 @@ class MqttGateway(Client):
         finally:
             self.logger.info(f"Done processing command: {command} {topic}")
 
-
-    async def process_mqtt_message(self, message: Tuple[str, str], client: Client, session: aiohttp.ClientSession) -> None:
+    async def process_mqtt_message(
+        self, message: Tuple[str, str], client: Client, session: aiohttp.ClientSession
+    ) -> None:
         """
         Processes a single MQTT message.
 
         Args:
-            message (Tuple[str, str, Client]): A tuple containing the topic, the payload, and the MQTT client used by the gateway. 
+            message (Tuple[str, str, Client]): A tuple containing the topic, the payload, and the MQTT client used by the gateway.
         """
         topic, payload = message
 
@@ -160,45 +143,47 @@ class MqttGateway(Client):
             )
             datapoints = await self.get_datapoints_by_topic(topic)
             if not datapoints:
-                await self.logger.info(f"No datapoints found for topic {topic} in Postgres")
+                await self.logger.info(
+                    f"No datapoints found for topic {topic} in Postgres"
+                )
                 return
             await self.logger.info(f"Got {len(datapoints)} datapoints from Postgres")
             # Add the datapoints to the cache
             for datapoint in datapoints:
                 await self.cache.hset(
-                    topic, 
-                    datapoint["object_id"],
-                    json.dumps(datapoint)
+                    topic, datapoint["object_id"], json.dumps(datapoint)
                 )
-        
+
         datapoints = await self.cache.hgetall(topic)
         for datapoint in datapoints.values():
             datapoint = json.loads(datapoint.decode("utf-8"))
             # Get the value from the payload using jsonpath
-            value = parse(datapoint["jsonpath"]).find(json.loads(payload.decode("utf-8")))[0].value
+            value = (
+                parse(datapoint["jsonpath"])
+                .find(json.loads(payload.decode("utf-8")))[0]
+                .value
+            )
             if value:
                 payload = {
                     datapoint["attribute_name"]: {
                         "type": "Number",
                         "value": value,
-                }
+                    }
                 }
                 # Send the payload to the Orion Context Broker
                 try:
                     await session.patch(
-                    url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                        url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
                         json=payload,
                         headers={
                             "fiware-service": header.service,
                             "fiware-servicepath": header.service_path,
-                        }
+                        },
                     )
                     await self.logger.info(f"Sent {payload} to Orion Context Broker")
                 except Exception as e:
                     await self.logger.error(e)
                     continue
-
-
 
     async def mqtt_listener(self, client: Client) -> None:
         """
@@ -218,8 +203,9 @@ class MqttGateway(Client):
             print(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
-                self.queue.put_nowait((1, "mqtt", (str(message.topic), message.payload)))
-                
+                self.queue.put_nowait(
+                    (1, "mqtt", (str(message.topic), message.payload))
+                )
 
     async def redis_listener(self, client: Client) -> None:
         """
@@ -241,13 +227,14 @@ class MqttGateway(Client):
                         ignore_subscribe_messages=True
                     )
                     if message is not None:
-                        print(f"Received message {message} on channel {message['channel']}")
-                        lock = self.cache.lock(message["channel"], timeout=1)
-                        async with lock:
-                            self.queue.put_nowait((0, "redis", (message["channel"], message["data"])))
+                        print(
+                            f"Received message {message} on channel {message['channel']}"
+                        )
+                        self.queue.put_nowait(
+                            (0, "redis", (message["channel"], message["data"]))
+                        )
             except asyncio.TimeoutError:
                 pass
-
 
     # The following methods are used to interact with the Postgres database.
     async def get_datapoints(self):
@@ -289,8 +276,7 @@ class MqttGateway(Client):
         while True:
             reconnect_interval = 5
             try:
-                async with Client(
-                    hostname=MQTT_HOST) as client:
+                async with Client(hostname=MQTT_HOST) as client:
                     tasks = [
                         asyncio.create_task(self.mqtt_listener(client)),
                         asyncio.create_task(self.redis_listener(client)),

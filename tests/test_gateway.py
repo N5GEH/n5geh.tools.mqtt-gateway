@@ -27,7 +27,7 @@ from jsonpath_ng import parse as parse_jsonpath
 import threading
 
 
-GATEWAY_URL = "http://localhost:8000"
+GATEWAY_URL = "http://localhost:2000"
 
 FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
 

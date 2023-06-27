@@ -1,0 +1,10 @@
+aiohttp==3.8.4
+aiologger==0.7.0
+async_timeout==4.0.2
+asyncio_mqtt==0.16.1
+asyncpg==0.27.0
+filip==0.2.5
+jsonpath_ng==1.5.3
+redis==4.5.4
+aiologger==0.7.0
+aiofiles==23.1.0

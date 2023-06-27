@@ -4,23 +4,26 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: mqtt_gateway_frontend
     ports:
       - 5173:5173
     networks:
       - bachelor_project
     volumes:
       - ./frontend:/dist  # for hot reloading
+    
   
-  backend:
+  api:
     build:
-      context: ./backend
+      context: ./backend/api
       dockerfile: Dockerfile
+    container_name: mqtt_gateway_api
     ports:
-      - 8000:8000
+      - 2000:8000  
     networks:
       - bachelor_project
     volumes:
-      - ./backend:/app  # for hot reloading
+      - ./backend/api:/app  # for hot reloading
     environment:
       - ORION_URL=http://orion:1026
       - MQTT_HOST=mosquitto
@@ -33,6 +36,45 @@ services:
       - FIWARE_SERVICE=mqtt_gateway
       - FIWARE_SERVICEPATH=/mqttgateway
       - API_KEY=plugnplay
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  gateway:
+    build:
+      context: ./backend/gateway
+      dockerfile: Dockerfile
+    
+    container_name: mqtt_gateway
+      
+    ports:
+      - 2020:8000
+    networks:
+      - bachelor_project
+    volumes:
+      - ./backend/gateway:/app  # for hot reloading
+    environment:
+      - ORION_URL=http://orion:1026
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=karelia
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=iot_devices
+      - REDIS_URL=redis://redis:6379
+      - FIWARE_SERVICE=mqtt_gateway
+      - FIWARE_SERVICEPATH=/mqttgateway
+      - API_KEY=plugnplay
+    
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
 networks:
   bachelor_project:
