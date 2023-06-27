@@ -8,12 +8,13 @@ import json
 import os
 import time
 from random import randint
-from typing import Union, Optional, Dict
+from typing import Dict, Union
 
 import aiohttp
 from asyncio_mqtt import Client as MQTTClient
 
 TEST_ENV = os.environ.get("TEST_ENV", "baseline")
+
 
 async def generate_random_string(length: int = 10) -> str:
     """
@@ -55,10 +56,7 @@ async def generate_payload(attribute_name: str = "") -> str:
         str: The payload as a JSON string.
     """
     fake_attribute = await generate_random_string(10)
-    return json.dumps(
-        {fake_attribute: randint(0, 1000), 
-         attribute_name: time.time()}
-    )
+    return json.dumps({fake_attribute: randint(0, 1000), attribute_name: time.time()})
 
 
 async def generate_fiware_header() -> None | Dict[str, str]:

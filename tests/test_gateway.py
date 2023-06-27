@@ -1,31 +1,26 @@
 import asyncio
 import json
-import time
-from random import uniform
-from typing import List
-
-import asyncio_mqtt
-import httpx
-from asyncio_mqtt import Client as MQTTClient
-from dateutil.parser import parse
-from fastapi import FastAPI
-from pydantic import BaseModel
-from uvicorn import Config, Server
-from aiologger import Logger
-from aiologger.handlers.files import AsyncFileHandler
-from filip.utils.cleanup import clear_context_broker, clear_iot_agent
-
-
-from plots.plots import plot_latency, plot_message_loss, plot_percentage_loss
-from utils.utils import generate_entity, generate_payload, register_device, register_entity, generate_subscription
-import aiohttp
 import sys
 from collections import defaultdict
 from uuid import uuid4
-from filip.models.base import FiwareHeader
-from jsonpath_ng import parse as parse_jsonpath
-import threading
 
+import aiohttp
+import asyncio_mqtt
+from aiologger import Logger
+from aiologger.handlers.files import AsyncFileHandler
+from asyncio_mqtt import Client as MQTTClient
+from dateutil.parser import parse
+from filip.models.base import FiwareHeader
+from filip.utils.cleanup import clear_context_broker
+from jsonpath_ng import parse as parse_jsonpath
+
+from plots.plots import plot_latency, plot_message_loss, plot_percentage_loss
+from utils.utils import (
+    generate_entity,
+    generate_payload,
+    generate_subscription,
+    register_entity,
+)
 
 GATEWAY_URL = "http://localhost:2000"
 
@@ -51,21 +46,30 @@ last_message_received = asyncio.Event()
 generate_messages = asyncio.Event()
 
 
-async def register_datapoint(session: aiohttp.ClientSession, entity_id: str, entity_type: str, attribute_name: str) -> None:
+async def register_datapoint(
+    session: aiohttp.ClientSession,
+    entity_id: str,
+    entity_type: str,
+    attribute_name: str,
+) -> None:
     """
     Register a new datapoint for the given entity in the gateway using the API.
     """
 
-    await session.post(f"{GATEWAY_URL}/data", json={
-        "object_id": str(uuid4()),
-        "jsonpath": f"$..{attribute_name}",
-        "topic": f"test/{entity_id}",
-        "description": "Test",
-        "entity_id": entity_id,
-        "entity_type": entity_type,
-        "attribute_name": attribute_name,
-        "matchDatapoint": True
-    })
+    await session.post(
+        f"{GATEWAY_URL}/data",
+        json={
+            "object_id": str(uuid4()),
+            "jsonpath": f"$..{attribute_name}",
+            "topic": f"test/{entity_id}",
+            "description": "Test",
+            "entity_id": entity_id,
+            "entity_type": entity_type,
+            "attribute_name": attribute_name,
+            "matchDatapoint": True,
+        },
+    )
+
 
 async def clear_gateway() -> None:
     """
@@ -73,6 +77,7 @@ async def clear_gateway() -> None:
     """
     async with aiohttp.ClientSession() as session:
         await session.delete(f"{GATEWAY_URL}/data")
+
 
 async def receive_mqtt_notification() -> None:
     """
@@ -115,14 +120,17 @@ async def generate_client() -> None:
             while True:
                 await generate_messages.wait()
                 await asyncio.sleep(1)
-                await client.publish(f"test/{entity_id}", await generate_payload(attribute_name=attribute_name))
+                await client.publish(
+                    f"test/{entity_id}",
+                    await generate_payload(attribute_name=attribute_name),
+                )
                 messages_sent[stage] += 1
     except Exception as e:
         print(f"An error occurred: {e}")
 
 
 async def generate_clients(
-        initial_clients: int, client_step: int, creation_interval: int
+    initial_clients: int, client_step: int, creation_interval: int
 ) -> None:
     """
     Generate a number of clients and publish a payload to the test/latency topic every second (potentially one could extend this to publish to different topics as well).
@@ -166,9 +174,10 @@ async def generate_clients(
         await clear_gateway()
         clear_context_broker("http://localhost:1026", FIWARE_HEADER)
 
+
 async def wait_for_last_stage_message(wait_time: int = 5):
     """
-    Wait for the last message to be received during each stage. 
+    Wait for the last message to be received during each stage.
     If no message is received in the last wait_time seconds, it returns.
     """
     while True:
@@ -176,7 +185,9 @@ async def wait_for_last_stage_message(wait_time: int = 5):
             await asyncio.wait_for(last_message_received.wait(), wait_time)
             last_message_received.clear()
         except asyncio.TimeoutError:
-            print(f"No messages received in the last {wait_time} seconds. Moving to the next stage...")
+            print(
+                f"No messages received in the last {wait_time} seconds. Moving to the next stage..."
+            )
             break
 
 

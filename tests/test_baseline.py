@@ -9,12 +9,18 @@ from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
 from asyncio_mqtt import Client as MQTTClient
 from dateutil.parser import parse
-from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
 from filip.models.base import FiwareHeader
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse as parse_jsonpath
+
 from plots.plots import plot_latency, plot_message_loss, plot_percentage_loss
-from utils.utils import generate_entity, generate_payload, register_device, register_entity, generate_subscription
+from utils.utils import (
+    generate_entity,
+    generate_payload,
+    generate_subscription,
+    register_device,
+    register_entity,
+)
 
 MQTT_HOSTNAME = "localhost"
 FIWARE_HEADER = FiwareHeader(service="baseline", service_path="/baseline")
