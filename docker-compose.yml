@@ -19,7 +19,7 @@ services:
       dockerfile: Dockerfile
     container_name: mqtt_gateway_api
     ports:
-      - 2000:8000  
+      - 8000:8000  
     networks:
       - bachelor_project
     volumes:
@@ -48,10 +48,6 @@ services:
       context: ./backend/gateway
       dockerfile: Dockerfile
     
-    container_name: mqtt_gateway
-      
-    ports:
-      - 2020:8000
     networks:
       - bachelor_project
     volumes:
@@ -65,11 +61,12 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=iot_devices
       - REDIS_URL=redis://redis:6379
-      - FIWARE_SERVICE=mqtt_gateway
-      - FIWARE_SERVICEPATH=/mqttgateway
+      - FIWARE_SERVICE=gateway
+      - FIWARE_SERVICEPATH=/gateway
       - API_KEY=plugnplay
     
     deploy:
+      replicas: 2
       restart_policy:
         condition: on-failure
         delay: 5s

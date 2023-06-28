@@ -16,6 +16,7 @@ from asyncio_mqtt import Client, MqttError
 from filip.models.base import FiwareHeader
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
+from uuid import uuid4
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
@@ -55,7 +56,7 @@ class MqttGateway(Client):
         )  # Cache for storing datapoints with an LRU eviction policy (least recently used)
         self.notifier = aioredis.from_url(
             url=f"{REDIS_URL}/1"
-        ).pubsub()  # PubSub channel for notifying the API about new data
+        )  # Redis Stream for notifying the API about new datapoints
         self.conn = None  # Initialized in run()
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
@@ -97,7 +98,7 @@ class MqttGateway(Client):
         await asyncio.gather(*workers)
 
     async def process_redis_message(
-        self, message: Tuple[str, str], client: Client
+        self, message: bytes, client: Client
     ) -> None:
         """
         Processes a single Redis message.
@@ -105,9 +106,10 @@ class MqttGateway(Client):
         Args:
             message (Tuple[str, str, Client]): A tuple containing the command, the topic, and the MQTT client used by the gateway.
         """
-        command, topic = message
-        command = command.decode("utf-8")
-        topic = topic.decode("utf-8")
+        decoded_data = {k.decode(): v.decode() for k, v in message.items()}
+
+        command = list(decoded_data.keys())[0]
+        topic = list(decoded_data.values())[0]
 
         try:
             print(f"Processing command: {command} {topic}")
@@ -216,27 +218,36 @@ class MqttGateway(Client):
         Args:
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
-        print("Listening to Redis...")
-        await self.notifier.subscribe("subscribe")
-        await self.notifier.subscribe("unsubscribe")
-        print("Subscribed to subscribe and unsubscribe channels")
+        stream_name = "manage_topics"
+        group_name = "manage_topics_group"
+        consumer_name = str(uuid4())
+
+        try:
+            await self.notifier.xgroup_create(stream_name, group_name, mkstream=True)
+        except Exception as e:
+            print(e)
+            pass
+
+        print(f"Listening to Stream {stream_name}...")
         while True:
             try:
                 async with async_timeout.timeout(1):
-                    message = await self.notifier.get_message(
-                        ignore_subscribe_messages=True
+                    messages = await self.notifier.xreadgroup(
+                        group_name,
+                        consumer_name,
+                        {stream_name: ">"},  # Read all messages not yet read
                     )
-                    if message is not None:
-                        print(
-                            f"Received message {message} on channel {message['channel']}"
-                        )
-                        self.queue.put_nowait(
-                            (0, "redis", (message["channel"], message["data"]))
-                        )
+                    for message in messages:
+                        stream, payload = message
+                        message_id, data = payload[0]
+                        print(f"Received message {message_id}")
+                        print(f"Received data {data}")
+                        self.queue.put_nowait((0, "redis", data))
+                        await self.notifier.xack(stream_name, group_name, message_id.decode("utf-8"))
             except asyncio.TimeoutError:
                 pass
-
-    # The following methods are used to interact with the Postgres database.
+                    
+                        # The following methods are used to interact with the Postgres database.
     async def get_datapoints(self):
         """
         Returns a list of all datapoints in the Postgres database.
@@ -270,7 +281,7 @@ class MqttGateway(Client):
         Starts the gateway and runs the main loop. Simultaneously listens to PostgreSQL for new topics to subscribe or unsubscribe to.
         In case of a connection error, the gateway will try to reconnect after 5 seconds and will continue to do so until a connection is established.
         """
-        await self.cache.flushall()
+        await self.cache.flushdb()
         self.conn = await asyncpg.connect(DATABASE_URL)
         self.s = aiohttp.ClientSession()
         while True:

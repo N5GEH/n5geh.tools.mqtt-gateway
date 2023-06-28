@@ -22,7 +22,7 @@ from utils.utils import (
     register_entity,
 )
 
-GATEWAY_URL = "http://localhost:2000"
+GATEWAY_URL = "http://localhost:8000"
 
 FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
 
@@ -30,8 +30,8 @@ mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
 max_clients = 10
-initial_clients = 10
-client_step = 10
+initial_clients = 2
+client_step = 2
 creation_interval = 10
 
 stage_count = max_clients // client_step
