@@ -231,9 +231,9 @@ async def add_datapoint(
         if not subscribed:
             stream_name = "manage_topics"
             await app.state.notifier.xadd(
-                stream_name,
-                {'subscribe': datapoint.topic},
-            )
+                    stream_name,
+                    {'subscribe': datapoint.topic},
+                )
 
 
         return {**datapoint.dict(), "subscribe": subscribed is None}

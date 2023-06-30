@@ -4,7 +4,23 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import make_interp_spline
+import os
+import pickle
+from datetime import datetime
 
+TEST_ENV = os.environ.get("TEST_ENV", "gateway1x")
+PRIMARY_COLOR = os.environ.get("PRIMARY_COLOR", "#6a5acd")
+SECONDARY_COLOR = os.environ.get("SECONDARY_COLOR", "#ff7369")
+
+def get_title(test_env: str) -> str:
+    if test_env == "gateway1x":
+        return "(1 gateway)"
+    elif test_env == "gateway4x":
+        return "(4 gateway cluster)"
+    elif test_env == "baseline":
+        return "(IoT Agent)"
+    else:
+        raise ValueError(f"Unknown test environment: {test_env} (must be one of 'gateway1x', 'gateway4x', 'baseline'))")
 
 def plot_percentage_loss(
     messages_sent: List,
@@ -23,7 +39,7 @@ def plot_percentage_loss(
 
     fig, ax = plt.subplots(figsize=(10, 7))
     scatter = ax.scatter(
-        x, percentage_loss, color="#ff7f0e", zorder=5
+        x, percentage_loss, color=PRIMARY_COLOR, zorder=5
     )  # plot the dots on the graph
     ax.grid(True)  # add a grid
 
@@ -32,12 +48,12 @@ def plot_percentage_loss(
     spl = make_interp_spline(x, percentage_loss, k=3)
     ynew = spl(xnew)
 
-    ax.plot(xnew, ynew, color="#ff7f0e")  # plot the curve
+    ax.plot(xnew, ynew, color=PRIMARY_COLOR, zorder=0)  # plot the curve
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_xlabel("Clients/s", fontsize=14)
     ax.set_ylabel("Percentage Loss", fontsize=14)
-    ax.set_title("Percentage of Messages Lost", fontsize=16)
+    ax.set_title(f"Percentage of Messages Lost {get_title(TEST_ENV)}", fontsize=16)
     ax.set_xticks(x)
     ax.set_xticklabels(messages_per_second, fontsize=14)
     ax.set_ylim(0, 100)  # ensure y-axis starts at 0% and ends at 100%
@@ -51,12 +67,13 @@ def plot_percentage_loss(
             xytext=(0, 10),
             ha="center",
         )
+    
+    ax.legend([scatter], ["Message Percentage Lost"], fontsize=14)
 
     fig.tight_layout()
-    if baseline:
-        plt.savefig("tests/results/baseline_message_loss_percentage.png")
-    else:
-        plt.savefig("tests/results/gateway_message_loss_percentage.png")
+    plt.savefig(f"tests/results/{TEST_ENV}_message_loss_percentage.png")
+    with open(f"tests/results/pickles/{TEST_ENV}_message_loss_percentage.pickle", "wb") as f:
+        pickle.dump((messages_sent, messages_received, messages_per_second), f, pickle.HIGHEST_PROTOCOL)
     plt.show()
 
 
@@ -78,14 +95,14 @@ def plot_message_loss(
 
     fig, ax = plt.subplots(figsize=(10, 7))
     rects1 = ax.bar(
-        x - width / 2, messages_sent, width, label="Messages Sent", color="#ff7f0e"
+        x - width / 2, messages_sent, width, label="Messages Sent", color=PRIMARY_COLOR
     )
-    rects2 = ax.bar(x + width / 2, messages_received, width, label="Messages Received")
+    rects2 = ax.bar(x + width / 2, messages_received, width, label="Messages Received", color=SECONDARY_COLOR)
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_xlabel("Clients/s", fontsize=14)
     ax.set_ylabel("Messages", fontsize=14)
-    ax.set_title("Messages Sent vs Messages Received", fontsize=16)
+    ax.set_title(f"Messages Sent vs Messages Received {get_title(TEST_ENV)}", fontsize=16)
     ax.set_xticks(x)
     ax.set_xticklabels(messages_per_second, fontsize=14)
     ax.legend(fontsize=14)
@@ -101,13 +118,13 @@ def plot_message_loss(
             ha="center",
             va="bottom",
             fontsize=14,
+            bbox=dict(boxstyle='round,pad=0.33', alpha=0.33, color='grey'),
         )
 
     fig.tight_layout()
-    if baseline:
-        plt.savefig("tests/results/baseline_message_loss_bar.png")
-    else:
-        plt.savefig("tests/results/gateway_message_loss_bar.png")
+    plt.savefig(f"tests/results/{TEST_ENV}_message_loss_bar.png")
+    with open(f"tests/results/pickles/{TEST_ENV}_message_loss_bar.pickle", "wb") as f:
+        pickle.dump((messages_sent, messages_received, messages_per_second), f, pickle.HIGHEST_PROTOCOL)
     plt.show()
 
 
@@ -124,16 +141,23 @@ def plot_latency(
     x = np.arange(len(messages_per_second))  # the label locations
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    ax.boxplot(latencies.values(), showfliers=False)
+    median_props = dict(linestyle="-", linewidth=1, color=PRIMARY_COLOR)
+    bp = ax.boxplot(latencies.values(), showfliers=False, medianprops=median_props)
     ax.set_xticklabels(messages_per_second, fontsize=14)
     ax.set_xlabel("Clients/s", fontsize=14)
     ax.set_ylabel("Latency (ms)", fontsize=14)
-    ax.set_title("Latency", fontsize=16)
+    ax.set_title(f"Latency {get_title(TEST_ENV)}", fontsize=16)
     ax.grid(True)
 
     fig.tight_layout()
-    if baseline:
-        plt.savefig("tests/results/baseline_latency.png")
-    else:
-        plt.savefig("tests/results/gateway_latency.png")
+    plt.savefig(f"tests/results/{TEST_ENV}_latency.png")
+    with open(f'tests/results/pickles/{TEST_ENV}_latencies.pickle', 'wb') as f:
+        pickle.dump((messages_per_second, latencies), f, protocol=pickle.HIGHEST_PROTOCOL)
     plt.show()
+
+# in case one needs to plot the data again using the pickles
+if __name__ == "__main__":
+    TEST_ENV = "gateway1x"
+    with open(f"tests/results/pickles/{TEST_ENV}_latencies.pickle", "rb") as f:
+        messages_per_second, latencies = pickle.load(f)
+    plot_latency(messages_per_second, latencies)

@@ -13,7 +13,7 @@ from typing import Dict, Union
 import aiohttp
 from asyncio_mqtt import Client as MQTTClient
 
-TEST_ENV = os.environ.get("TEST_ENV", "gateway")
+TEST_ENV = os.environ.get("TEST_ENV", "gateway4x")
 
 
 async def generate_random_string(length: int = 10) -> str:
@@ -63,7 +63,7 @@ async def generate_fiware_header() -> None | Dict[str, str]:
     """
     Generate the FIWARE headers for the requests. This is used to test whether the matching works properly.
     """
-    if TEST_ENV not in ["baseline", "gateway"]:
+    if TEST_ENV not in ["baseline", "gateway1x", "gateway4x"]:
         raise ValueError("TEST_ENV must be either 'baseline' or 'gateway'")
     return {
         "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",

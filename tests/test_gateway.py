@@ -29,10 +29,10 @@ FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
 mqtt_broker_address = "localhost"
 orion_address = "http://localhost:1026"
 
-max_clients = 10
-initial_clients = 2
-client_step = 2
-creation_interval = 10
+max_clients = 500
+initial_clients = 50
+client_step = 50
+creation_interval = 30
 
 stage_count = max_clients // client_step
 messages_sent = [0] * stage_count

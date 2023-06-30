@@ -235,7 +235,8 @@ class MqttGateway(Client):
                     messages = await self.notifier.xreadgroup(
                         group_name,
                         consumer_name,
-                        {stream_name: ">"},  # Read all messages not yet read
+                        {stream_name: ">"},
+                        count=1,
                     )
                     for message in messages:
                         stream, payload = message
