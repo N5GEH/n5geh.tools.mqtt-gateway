@@ -142,7 +142,7 @@ def plot_latency(
 
     fig, ax = plt.subplots(figsize=(10, 7))
     median_props = dict(linestyle="-", linewidth=1, color=PRIMARY_COLOR)
-    bp = ax.boxplot(latencies.values(), showfliers=False, medianprops=median_props)
+    bp = ax.boxplot(latencies.values(), showfliers=False, medianprops=median_props, whis=[10, 90])
     ax.set_xticklabels(messages_per_second, fontsize=14)
     ax.set_xlabel("Clients/s", fontsize=14)
     ax.set_ylabel("Latency (ms)", fontsize=14)
@@ -155,9 +155,34 @@ def plot_latency(
         pickle.dump((messages_per_second, latencies), f, protocol=pickle.HIGHEST_PROTOCOL)
     plt.show()
 
+def plot_pie_chart():
+    categories = ['Energieverbrauch', 'Latenz', 'Antwortzeit', 'Skalierbarkeit', 
+                'Ausführungszeit', 'Kosten', 'Zuverlässigkeit', 'Sicherheit', 'Netzwerkbandbreite']
+    percentages = [22, 14, 6, 10, 9, 6, 12, 13, 8]
+
+    data = {'categories': categories, 'percentages': percentages}
+
+    # Create colors for the pie chart slices
+    colors = ['#6a5acd', '#7269c3', '#7a77b9', '#8274af', '#8a72a5', '#92709b', '#9a6e91', 
+            '#a26c87', '#aa6a7d', '#b26873', '#ba6669', '#c2645f', '#ca6255', '#d2604b', 
+            '#da5e41', '#e25c37', '#ea5a2d', '#f25823', '#fa5619', '#ff540f', '#ff7369']
+
+    # Create pie chart
+    fig1, ax1 = plt.subplots(figsize=(10, 7))
+    ax1.pie(percentages, labels=categories, colors=colors, autopct='%1.1f%%', startangle=140, pctdistance=0.85)
+    
+    # change the font size of the percentages and the labels
+    for text in ax1.texts:
+        text.set_fontsize(14)
+
+
+    
+    plt.tight_layout()
+    # Display the pie chart
+    plt.savefig(f"tests/results/pie_chart.png")
+    plt.show()
+
+
 # in case one needs to plot the data again using the pickles
 if __name__ == "__main__":
-    TEST_ENV = "gateway1x"
-    with open(f"tests/results/pickles/{TEST_ENV}_latencies.pickle", "rb") as f:
-        messages_per_second, latencies = pickle.load(f)
-    plot_latency(messages_per_second, latencies)
+
