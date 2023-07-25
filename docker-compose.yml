@@ -12,7 +12,6 @@ services:
     volumes:
       - ./frontend:/dist  # for hot reloading
     
-  
   api:
     build:
       context: ./backend/api
@@ -24,18 +23,8 @@ services:
       - bachelor_project
     volumes:
       - ./backend/api:/app  # for hot reloading
-    environment:
-      - ORION_URL=http://orion:1026
-      - MQTT_HOST=mosquitto
-      - MQTT_PORT=1883
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=karelia
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=iot_devices
-      - REDIS_URL=redis://redis:6379
-      - FIWARE_SERVICE=mqtt_gateway
-      - FIWARE_SERVICEPATH=/mqttgateway
-      - API_KEY=plugnplay
+    env_file:
+      - .env
     deploy:
       restart_policy:
         condition: on-failure
@@ -47,24 +36,12 @@ services:
     build:
       context: ./backend/gateway
       dockerfile: Dockerfile
-    
     networks:
       - bachelor_project
     volumes:
       - ./backend/gateway:/app  # for hot reloading
-    environment:
-      - ORION_URL=http://orion:1026
-      - MQTT_HOST=mosquitto
-      - MQTT_PORT=1883
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=karelia
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=iot_devices
-      - REDIS_URL=redis://redis:6379
-      - FIWARE_SERVICE=gateway
-      - FIWARE_SERVICEPATH=/gateway
-      - API_KEY=plugnplay
-    
+    env_file:
+      - .env
     deploy:
       replicas: 1
       restart_policy:
