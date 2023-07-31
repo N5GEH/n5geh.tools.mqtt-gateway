@@ -8,10 +8,31 @@
   // The style tag contains the css code for the component
   // Learn more about svelte here: https://svelte.dev/tutorial/basics
   import { onMount } from 'svelte';
+  import dotenv from 'dotenv';
+  dotenv.config();
+
+  interface Datapoint {
+    object_id: string;
+    jsonpath: string;
+    topic: string;
+    description: string;
+    entity_id: string;
+    entity_type: string;
+    attribute_name: string;
+    matchDatapoint: boolean;
+    status?: string | boolean;
+  }
+
+  interface SystemStatus {
+    orion: string;
+    postgres: string;
+    redis: string;
+  }
 
   // Variables for the form to add a new datapoint to the database
   // The newObjectId is generated on data submission and is not editable
-  let data: any[] = [];
+  let API_HOST: string = process.env.API_HOST || 'http://localhost:8000';
+  let data: Datapoint[] = [];
   let newObjectId: string = '';
   let newJsonPath: string = '';
   let newTopic: string = '';
@@ -32,7 +53,7 @@
     // Fetch the data from the backend and store it in the data variable for use in the template
     // The status of each datapoint is also fetched and stored in the status variable
     // The data is then used to populate the table in the template
-    const response = await fetch('http://localhost:8000/data');
+    const response: Response = await fetch(`${API_HOST}/data`);
     const responseData = await response.json();
     // since the status is fetched asynchronously, we need to wait for all the promises to resolve
     // before we can use the data
@@ -42,10 +63,10 @@
     }));
   }
 
-  async function addData() {
+  async function addData(): Promise<void> {
     // Add a new datapoint to the database
     // The object_id is generated on submission and is not editable
-    const response = await fetch('http://localhost:8000/data', {
+    const response: Response = await fetch(`${API_HOST}/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -73,10 +94,10 @@
     }
   }
 
-  async function updateData(datapoint) {
+  async function updateData(datapoint: Datapoint): Promise<void> {
   // Update a datapoint in the database
   // This is called when the user clicks the save button after editing a datapoint in the table
-    const response = await fetch(`http://localhost:8000/data/${datapoint.object_id}`, {
+    const response: Response = await fetch(`${API_HOST}/data/${datapoint.object_id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity_id: datapoint.entity_id, entity_type: datapoint.entity_type, attribute_name: datapoint.attribute_name, description: datapoint.description }),
@@ -88,9 +109,9 @@
     }
 }
 
-async function deleteData(object_id) {
+async function deleteData(object_id: string): Promise<void> {
     // Delete a datapoint from the database
-    const response = await fetch(`http://localhost:8000/data/${object_id}`, {
+    const response: Response = await fetch(`${API_HOST}/data/${object_id}`, {
       method: 'DELETE',
     });
     if (response.ok) {
@@ -98,12 +119,12 @@ async function deleteData(object_id) {
     }
   }
 
-async function getStatus(object_id) {
+async function getStatus(object_id: string): Promise<string | boolean> {
   // Get the status of a datapoint
   // This is called when the data is fetched from the backend and is used to populate the status column in the table
   // It reflects whether an attribute with the given entity_id and attribute_name exists in the Context Broker
   try {
-    const response = await fetch(`http://localhost:8000/data/${object_id}/status`);
+    const response = await fetch(`${API_HOST}/data/${object_id}/status`);
     if (!response.ok) throw new Error('Error');
     const status = await response.json();
     return status;
@@ -112,19 +133,19 @@ async function getStatus(object_id) {
   }
 }
 
-async function getSystemStatus() {
+async function getSystemStatus(): Promise<SystemStatus> {
   // Get the status of the Context Broker, PostgreSQL and Redis
   // This is called when the page is loaded and is used to display the status of the services in the header
   try {  
-    const orionResponse = await fetch('http://localhost:8000/system/orion/status');
+    const orionResponse = await fetch(`${API_HOST}/system/orion/status`);
     if (!orionResponse.ok) throw new Error('Orion error');
     const orionStatus = await orionResponse.json();
 
-    const postgresResponse = await fetch('http://localhost:8000/system/postgres/status');
+    const postgresResponse = await fetch(`${API_HOST}/system/postgres/status`);
     if (!postgresResponse.ok) throw new Error('Postgres error');
     const postgresStatus = await postgresResponse.json();
 
-    const redisResponse = await fetch('http://localhost:8000/system/redis/status');
+    const redisResponse = await fetch(`${API_HOST}/system/redis/status`);
     if (!redisResponse.ok) throw new Error('Redis error');
     const redisStatus = await redisResponse.json();
 
@@ -142,21 +163,19 @@ async function getSystemStatus() {
   }
 }
 
-function editData(datapoint) {
+function editData(datapoint: Datapoint): void {
   // This is called when the user clicks the edit button in the table
   // It sets the currentlyEditing variable to the object_id of the datapoint that is being edited and stores a copy of the datapoint in tempData
   currentlyEditing = datapoint.object_id;
   tempData = { ...datapoint };
 }
 
-function cancelEditing() {
+function cancelEditing(): void {
   // This is called when the user clicks the cancel button after editing a datapoint in the table
   // It resets the currentlyEditing variable and the tempData variable and cancels the edit
   currentlyEditing = null;
   tempData = null;
 }
-
-
   onMount(fetchData); // fetch the data when the component is mounted (i.e. when the page is loaded)
 </script>
 
@@ -167,9 +186,9 @@ function cancelEditing() {
   {#await getSystemStatus()}
   <p>Checking...</p>
   {:then systemStatus}
-  <p>Orion: {systemStatus.orion ? 'OK' : 'ERROR'}</p>
-  <p>PostgreSQL: {systemStatus.postgres ? 'OK' : 'ERROR'}</p>
-    <p>Redis: {systemStatus.redis ? 'OK' : 'ERROR'}</p>
+  <p>Orion: {systemStatus.orion}</p>
+  <p>PostgreSQL: {systemStatus.postgres}</p>
+    <p>Redis: {systemStatus.redis}</p>
   {:catch error}
     <p>Error: {error.message}</p>
   {/await}
