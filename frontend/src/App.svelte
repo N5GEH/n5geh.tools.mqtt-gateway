@@ -9,6 +9,10 @@
   // Learn more about svelte here: https://svelte.dev/tutorial/basics
   import { onMount } from 'svelte';
   import dotenv from 'dotenv';
+
+  import Status from './Status.svelte';
+  import DataTable from './DataTable.svelte';
+  import Form from './Form.svelte';
   dotenv.config();
 
   interface Datapoint {
@@ -48,20 +52,6 @@
   // so that the user can cancel the edit and the original values are not lost
   let currentlyEditing: string = null;
   let tempData: any = null;
-
-  async function fetchData() {
-    // Fetch the data from the backend and store it in the data variable for use in the template
-    // The status of each datapoint is also fetched and stored in the status variable
-    // The data is then used to populate the table in the template
-    const response: Response = await fetch(`${API_HOST}/data`);
-    const responseData = await response.json();
-    // since the status is fetched asynchronously, we need to wait for all the promises to resolve
-    // before we can use the data
-    data = await Promise.all(responseData.map(async row => {
-      row.status = await getStatus(row.object_id);
-      return row;
-    }));
-  }
 
   async function addData(): Promise<void> {
     // Add a new datapoint to the database
@@ -108,16 +98,6 @@
       fetchData();
     }
 }
-
-async function deleteData(object_id: string): Promise<void> {
-    // Delete a datapoint from the database
-    const response: Response = await fetch(`${API_HOST}/data/${object_id}`, {
-      method: 'DELETE',
-    });
-    if (response.ok) {
-      fetchData();
-    }
-  }
 
 async function getStatus(object_id: string): Promise<string | boolean> {
   // Get the status of a datapoint
@@ -181,112 +161,9 @@ function cancelEditing(): void {
 
 <body>
   <h1>IoT Gateway</h1>
-  <div class="status">
-  <p>Services status:</p>
-  {#await getSystemStatus()}
-  <p>Checking...</p>
-  {:then systemStatus}
-  <p>Orion: {systemStatus.orion}</p>
-  <p>PostgreSQL: {systemStatus.postgres}</p>
-    <p>Redis: {systemStatus.redis}</p>
-  {:catch error}
-    <p>Error: {error.message}</p>
-  {/await}
-  </div>
-<div class="content">
-<table>
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>JsonPATH</th>
-      <th>Topic</th>
-      <th>Description</th>
-      <th>Entity ID</th>
-      <th>Entity Type</th>
-      <th>Attribute Name</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    <!-- 
-      The table is populated with the data fetched from the backend 
-    -->
-    {#each data as row (row.object_id)}
-      <tr>
-        <td>{row.object_id}</td>
-        <td>{row.jsonpath}</td>
-        <td>{row.topic}</td>
-        <td>
-          {#if currentlyEditing === row.object_id}
-            <input bind:value={tempData.description} />
-          {:else}
-            {row.description || ''}
-          {/if}
-        </td>
-        <td>
-          {#if currentlyEditing === row.object_id}
-            <input bind:value={tempData.entity_id} />
-          {:else}
-            {row.entity_id || ''}
-          {/if}
-        </td>
-        <td>
-          {#if currentlyEditing === row.object_id}
-            <input bind:value={tempData.entity_type} />
-          {:else}
-            {row.entity_type || ''}
-          {/if}
-        </td>
-        <td>
-          {#if currentlyEditing === row.object_id}
-            <input bind:value={tempData.attribute_name} />
-          {:else}
-            {row.attribute_name || ''}
-          {/if}
-        </td>
-        <td>{row.status ? 'Match found' : 'No match'}</td>
-        <td>
-          {#if currentlyEditing === row.object_id}
-            <!-- this needs to be an arrow function to prevent it from being called on render -->
-            <!-- otherwise it would be called on render and the data would be updated immediately without the user clicking the button -->
-            <button on:click={() => updateData(tempData)}>Save</button>
-            <button on:click={cancelEditing}>Cancel</button>
-          {:else}
-            <!-- same reason as above -->
-            <button on:click={() => editData(row)}>{row.status ? 'Reconfigure' : 'Configure'}</button>
-            <button on:click={() => deleteData(row.object_id)}>Delete</button>
-          {/if}
-      </tr>
-    {/each}
-  </tbody>
-</table>
-<!-- 
-  The form is used to add new datapoints to the database
-  preventDefault is used to prevent the page from reloading when the form is submitted
-  so that the data can be added to the database without the page reloading which would cause the data to be lost
--->
-<form on:submit|preventDefault={addData}>
-  <label for="jsonpath">JsonPATH</label>
-  <input type="text" id="jsonpath" bind:value={newJsonPath} required />
-  <label for="topic">Topic</label>
-  <input type="text" id="topic" bind:value={newTopic} required />
-  <label for="description">Description</label>
-  <input type="text" id="description" bind:value={newDescription}/>
-  <div class="matchDatapoint">
-    <label for="matchDatapoint">Match Datapoint</label>
-    <input type="checkbox" id="matchDatapoint" bind:checked={matchDatapoint} />
-  </div>
-  {#if matchDatapoint}
-    <label for="entity_id">Entity ID</label>
-    <input type="text" id="entity_id" bind:value={newEntityId} required />
-    <label for="entity_type">Entity Type</label>
-    <input type="text" id="entity_type" bind:value={newEntityType} required />
-    <label for="attribute_name">Attribute Name</label>
-    <input type="text" id="attribute_name" bind:value={newAttributeName} required />
-  {/if}
-  <button type="submit">Add Datapoint</button>
-</form>
-</div>
+  <Status />
+  <DataTable />
+  <Form />
 </body>
 
 <style>
