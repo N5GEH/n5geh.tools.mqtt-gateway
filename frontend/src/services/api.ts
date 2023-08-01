@@ -1,7 +1,4 @@
 // contain all the api calls to the backend
-import dotenv from 'dotenv';
-dotenv.config();
-
 let API_HOST = process.env.API_HOST || 'http://localhost:8000';
 
 export interface Datapoint {
