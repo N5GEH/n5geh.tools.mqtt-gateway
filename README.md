@@ -160,10 +160,10 @@ The gateway can be configured with the following environment variables:
 
 ### Baseline gateway (no gateway)
 #### Latency
-![Latency](tests/preview/test_latency.png "Latency")
+![Latency](load-tests/preview/test_latency.png "Latency")
 
 #### Message loss
-![Message loss](tests/preview/test_messloss.png "Message loss")
+![Message loss](load-tests/preview/test_messloss.png "Message loss")
 
 #### Connection rate
-![Connection rate](tests/preview/test_connrate.png "Connection rate")
+![Connection rate](load-tests/preview/test_connrate.png "Connection rate")
