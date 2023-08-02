@@ -281,9 +281,12 @@ async def update_datapoint(
         jsonpath = await conn.fetchval(
             """SELECT jsonpath FROM datapoints WHERE object_id=$1""", object_id
         )
+        topic = await conn.fetchval(
+            """SELECT topic FROM datapoints WHERE object_id=$1""", object_id
+        )
 
     await app.state.redis.hset(
-        datapoint.topic,
+        topic,
         object_id,
         json.dumps(
             {
