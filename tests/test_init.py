@@ -38,19 +38,21 @@ class TestInit(unittest.TestCase):
         self.cbc.post_entity(entity=self.test_entity)
 
         # create basis data points
-        unmatched_datapoint = Datapoint(
+        self.unmatched_object_id = "dp_basis:002"
+        self.unmatched_datapoint = Datapoint(
             **{
-                "object_id": "dp_basis:002",
+                "object_id": self.unmatched_object_id,
                 "topic": "topic/of/dp_basis:002",
                 "jsonpath": "$../data2"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=unmatched_datapoint.json())
+                                    data=self.unmatched_datapoint.json())
 
-        matched_datapoint = Datapoint(
+        self.matched_object_id = "dp_basis:001"
+        self.matched_datapoint = Datapoint(
             **{
-                "object_id": "dp_basis:001",
+                "object_id": self.matched_object_id,
                 "topic": "topic/of/dp_basis:001",
                 "jsonpath": "$../data1",
                 "matchDatapoint": True,
@@ -60,7 +62,7 @@ class TestInit(unittest.TestCase):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=matched_datapoint.json())
+                                    data=self.matched_datapoint.json())
 
         # initialize MQTT client
         self.mqttc = Client(protocol=MQTTv5)
