@@ -43,6 +43,7 @@ class Datapoint(BaseModel):
 
 
 class DatapointUpdate(BaseModel):
+    object_id: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -277,12 +278,11 @@ async def update_datapoint(
             object_id,
         )
 
-        jsonpath = await conn.fetchval(
-            """SELECT jsonpath FROM datapoints WHERE object_id=$1""", object_id
+        jsonpath, topic = await conn.fetchrow(
+            """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
         )
-
     await app.state.redis.hset(
-        datapoint.topic,
+        topic,
         object_id,
         json.dumps(
             {

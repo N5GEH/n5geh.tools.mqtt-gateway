@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchData, updateData, deleteData } from '../services/api';
+  import { updateData, deleteData } from '../services/api';
   import { data, currentlyEditing, tempData } from '../stores/stores';
   import { refreshData } from '../services/dataService';
 
@@ -10,7 +10,7 @@
   // This is called when the user clicks the edit button in the table
   // It sets the currentlyEditing variable to the object_id of the datapoint that is being edited and stores a copy of the datapoint in tempData
   currentlyEditing.set(datapoint.object_id);
-  tempData.set({ ...datapoint });
+  tempData.set(datapoint as DatapointUpdate);
 }
 
   function cancelEditing(): void {
@@ -32,6 +32,8 @@
   async function handleUpdate(datapoint: DatapointUpdate): Promise<void> {
     try {
       await updateData(datapoint);
+      currentlyEditing.set(null); // Reset the currentlyEditing variable
+      tempData.set(null); // Reset the tempData variable
       await refreshData(); // Refresh the table
     } catch (e) {
       console.error('An error occurred while updating the data:', e);
@@ -98,7 +100,7 @@
                   {#if $currentlyEditing === row.object_id}
                     <!-- this needs to be an arrow function to prevent it from being called on render -->
                     <!-- otherwise it would be called on render and the data would be updated immediately without the user clicking the button -->
-                    <button on:click={() => updateData($tempData)}>Save</button>
+                    <button on:click={() => handleUpdate($tempData)}>Save</button>
                     <button on:click={cancelEditing}>Cancel</button>
                   {:else}
                     <!-- same reason as above -->
