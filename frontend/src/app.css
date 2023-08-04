@@ -1,12 +1,11 @@
 :root {
+  --primary-color: #E62332;
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  color: #213547; 
+  background-color: #ffffff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -14,30 +13,13 @@
   -webkit-text-size-adjust: 100%;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-.card {
-  padding: 2em;
+@media (prefers-color-scheme: dark) { /* Updated for dark mode */
+  :root {
+    color: rgba(255, 255, 255, 0.87); 
+    background-color: #242424;
+  }
+  a:hover { color: #ff9a9a; }
+  button { background-color: #1a1a1a; }
 }
 
 #app {
@@ -47,6 +29,33 @@ h1 {
   text-align: center;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+.status-container {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.content-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* Align the table and the form at the top */
+  width: 100%;
+}
+.table-container,
+.form-container {
+  flex: 1;
+  padding: 10px;
+}
+
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -54,27 +63,72 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: var(--primary-color);
   cursor: pointer;
   transition: border-color 0.25s;
 }
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+
+button:hover { border-color: #ff9a9a; }
+button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color; }
+table > tbody > tr > td > button, .content > button { 
+  background-color: var(--primary-color);
+  width: 100%;
+  margin: 0.25em 0 0.25em 0;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 1em;
+  border: 1px solid #ccc;
+}
+
+th { background-color: var(--primary-color); }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  margin: 2em 2em 0 2em;
+}
+
+form > label { font-weight: bold; align-self: flex-start; }
+form > input { padding: 0.5em; border: 1px solid #ccc; border-radius: 0.25em; }
+
+.content {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.status > p, .matchDatapoint {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 0.25em 0;
+}
+
+.status-ok, .status-error {
+  display: flex;
+  align-items: center;
+}
+
+.status-ok { color: green; }
+.status-error { color: red; }
+
+.circle {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  margin-right: 0.5em;
 }

@@ -1,14 +1,15 @@
 import json
 import os
 from typing import List, Optional
+from uuid import uuid4
 
 import asyncpg
-import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from redis import asyncio as aioredis
+import aiohttp
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -24,11 +25,14 @@ host = os.environ.get("POSTGRES_HOST", "localhost")
 user = os.environ.get("POSTGRES_USER", "karelia")
 password = os.environ.get("POSTGRES_PASSWORD", "postgres")
 database = os.environ.get("POSTGRES_DB", "iot_devices")
+DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
+ORION_URL = os.environ.get("ORION_URL", "http://localhost:1026")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 
 # Pydantic model
 class Datapoint(BaseModel):
-    object_id: str
+    object_id: Optional[str] = Field(None, min_length=1, max_length=255)
     jsonpath: str
     topic: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -39,16 +43,11 @@ class Datapoint(BaseModel):
 
 
 class DatapointUpdate(BaseModel):
+    object_id: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
-
-
-# Database connection settings
-DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
-ORION_URL = os.environ.get("ORION_URL", "http://localhost:1026")
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 
 @app.on_event("startup")
@@ -178,6 +177,7 @@ async def add_datapoint(
         UniqueViolationError: If the object_id of the datapoint already exists in the database, a 409 error will be raised.
         Exception: If some other error occurs, a 500 error will be raised.
     """
+    datapoint.object_id = str(uuid4())
     if datapoint.matchDatapoint and (
         datapoint.entity_id is None or datapoint.attribute_name is None
     ):
@@ -278,13 +278,9 @@ async def update_datapoint(
             object_id,
         )
 
-        jsonpath = await conn.fetchval(
-            """SELECT jsonpath FROM datapoints WHERE object_id=$1""", object_id
+        jsonpath, topic = await conn.fetchrow(
+            """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
         )
-        topic = await conn.fetchval(
-            """SELECT topic FROM datapoints WHERE object_id=$1""", object_id
-        )
-
     await app.state.redis.hset(
         topic,
         object_id,
@@ -423,79 +419,60 @@ async def get_match_status(
     if row is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(
             f"{ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}/?type={row['entity_type']}"
         )
-        return response.status_code == 200
+        return response.status == 200
 
-
-@app.get(
-    "/system/orion/status",
-    response_model=bool,
-    summary="Get the status of the Context Broker",
-    description="Get the status of the Context Broker. This is to allow the frontend to check whether the Context Broker is reachable.",
+@app.get("/system/status",
+    response_model=dict,
+    summary="Get the status of the system",
+    description="Get the status of the system. This is to allow the frontend to check whether the system is running properly.",
 )
-async def get_orion_status():
+async def get_status():
+    system_status = {
+        "orion": await check_orion(),
+        "postgres": await check_postgres(),
+        "redis": await check_redis(),
+    }
+    return system_status
+
+
+async def check_orion():
     """
-    Get the status of the Context Broker. This is to allow the frontend to check whether the Context Broker is reachable.
-
-    Returns:
-        bool: True if the Context Broker is reachable, False otherwise.
-    """
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{ORION_URL}/version")
-        return response.status_code == 200
-
-
-@app.get(
-    "/system/postgres/status",
-    response_model=bool,
-    summary="Get the status of the database",
-    description="Get the status of the database. This is to allow the frontend to check whether the database is reachable.",
-)
-async def get_postgres_status(conn: asyncpg.Connection = Depends(get_connection)):
-    """
-    Get the status of the database. This is to allow the frontend to check whether the database is reachable.
-
-    Args:
-        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-
-    Raises:
-        HTTPException: If the database is not reachable, a 500 error will be raised.
-
-    Returns:
-        bool: True if the database is reachable, False otherwise.
+    Check whether the Orion Context Broker is running properly.
     """
     try:
-        await conn.execute("SELECT 1")
-        return True
-    except:
-        raise HTTPException(status_code=500, detail="Database is not reachable!")
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(f"{ORION_URL}/version")
+            return response.status == 200
+    except Exception as e:
+        print(f"Error checking Orion: {e}")
+        return False
 
-
-@app.get(
-    "/system/redis/status",
-    response_model=bool,
-    summary="Get the status of the Redis cache",
-    description="Get the status of the Redis cache. This is to allow the frontend to check whether the Redis server is reachable.",
-)
-async def get_redis_status():
+async def check_postgres():
     """
-    Get the status of the Redis cache. This is to allow the frontend to check whether the Redis cache is reachable.
+    Check whether the PostgreSQL database is running properly.
+    """
+    try:
+        async with app.state.pool.acquire() as connection:
+            await connection.execute("SELECT 1")
+            return True
+    except Exception as e:
+        print(f"Error checking PostgreSQL: {e}")
+        return False
 
-    Raises:
-        HTTPException: If the Redis cache is not reachable, a 500 error will be raised.
-
-    Returns:
-        bool: True if the Redis cache is reachable, False otherwise.
+async def check_redis():
+    """
+    Check whether the Redis cache is running properly.
     """
     try:
         await app.state.redis.ping()
         return True
-    except:
-        raise HTTPException(status_code=500, detail="Redis server is not reachable!")
-
+    except Exception as e:
+        print(f"Error checking Redis: {e}")
+        return False
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
