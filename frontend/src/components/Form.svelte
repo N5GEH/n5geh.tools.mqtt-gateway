@@ -1,19 +1,19 @@
 <!-- Form.svelte -->
 <script lang="ts">
-  import { newDatapoint } from './stores';
-  import type { Datapoint } from './api';
-  import { addData } from './api';
+  import { newDatapoint } from '../stores/stores';
+  import type { Datapoint } from '../services/api';
+  import { addData } from '../services/api';
+  import { refreshData } from '../services/dataService';
 
   let formState: Partial<Datapoint> = {
-    object_id: '',
+    object_id: null,
     jsonpath: '',
     topic: '',
     description: '',
-    entity_id: '',
-    entity_type: '',
-    attribute_name: '',
-    matchDatapoint: false,
-    status: '',
+    entity_id: null,
+    entity_type: null,
+    attribute_name: null,
+    matchDatapoint: false
   };
 
   // Reactive statement that updates whenever formState changes
@@ -23,17 +23,17 @@
     event.preventDefault();
     try {
       await addData($newDatapoint);
+      await refreshData();
       // Reset formState after successful addition
       formState = {
-        object_id: '',
+        object_id: null,
         jsonpath: '',
         topic: '',
         description: '',
-        entity_id: '',
-        entity_type: '',
-        attribute_name: '',
-        matchDatapoint: false,
-        status: '',
+        entity_id: null,
+        entity_type: null,
+        attribute_name: null,
+        matchDatapoint: false
       };
     } catch (e) {
       console.error('An error occurred while adding the data:', e);

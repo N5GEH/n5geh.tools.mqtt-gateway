@@ -20,9 +20,9 @@
     <div class="status">
         <p>Services status:</p>
         {#if systemStatus}
-            <p class="status-ok">Orion: {systemStatus.orion}</p>
-            <p class="status-ok">Postgres: {systemStatus.postgres}</p>
-            <p class="status-ok">Redis: {systemStatus.redis}</p>
+            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.orion ? 'green' : 'red'}"></span>Orion</p>
+            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.postgres ? 'green' : 'red'}"></span>Postgres</p>
+            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.redis ? 'green' : 'red'}"></span>Redis</p>
         {:else}
             <p class="status-error">Checking...</p>
         {/if}

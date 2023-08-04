@@ -147,3 +147,20 @@ button {
   display: flex;
   flex-direction: row;
 }
+
+.status-ok {
+  color: green;
+  display: flex;
+  align-items: center;
+}
+.status-error {
+  color: red;
+  display: flex;
+  align-items: center;
+}
+.circle {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  margin-right: 0.5em;
+}

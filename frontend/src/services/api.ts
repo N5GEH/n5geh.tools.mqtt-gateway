@@ -2,23 +2,23 @@
 let API_HOST = process.env.API_HOST || 'http://localhost:8000';
 
 export interface Datapoint {
-    object_id: string;
+    object_id?: string;
     jsonpath: string;
     topic: string;
     description: string;
-    entity_id: string;
-    entity_type: string;
-    attribute_name: string;
+    entity_id: string | null; // Can be a string or null
+    entity_type: string | null; // Can be a string or null
+    attribute_name: string | null; // Can be a string or null
     matchDatapoint: boolean;
-    status?: string | boolean | undefined;
+    status?: string | boolean | null; // Can be a string, boolean, or null
 }
 
 export interface DatapointUpdate {
     object_id: string;
-    entity_id?: string | undefined;
-    entity_type?: string | undefined;
-    attribute_name?: string | undefined;
-    description?: string | undefined;
+    entity_id?: string;
+    entity_type?: string;
+    attribute_name?: string;
+    description?: string;
 }
 
 export interface SystemStatus {
@@ -58,26 +58,41 @@ export const updateData = async (data: DatapointUpdate) => {
         },
         body: JSON.stringify(data)
     });
+    if (!response.ok) {
+        throw new Error(`Failed to update datapoint with object_id ${data.object_id}`);
+    }
     const responseData = await response.json();
     return responseData;
 }
 
-export const deleteData = async (object_id: string) => {
+export const deleteData = async (object_id: string): Promise<Datapoint | null> => {
     const response: Response = await fetch(`${API_HOST}/data/${object_id}`, {
         method: 'DELETE',
     });
+    // the server returns a 204 No Content response if the delete was successful
+    if (response.status === 204) {
+        return null;
+    } else if (!response.ok) {
+        throw new Error(`Failed to delete datapoint with object_id ${object_id}`);
+    }
     const responseData = await response.json();
     return responseData;
 }
 
-export const getStatus = async (object_id: string) => {
-    const response: Response = await fetch(`${API_HOST}/data/${object_id}status`);
+export const getStatus = async (object_id: string): Promise<string | boolean | null> => {
+    const response: Response = await fetch(`${API_HOST}/data/${object_id}/status`);
+    if (!response.ok) {
+        throw new Error(`Failed to get status for datapoint with object_id ${object_id}`);
+    }
     const responseData = await response.json();
-    return responseData;
+    return responseData.status;
 }
 
 export const getSystemStatus = async (): Promise<SystemStatus> => {
-    const response: Response = await fetch(`${API_HOST}/status`);
+    const response: Response = await fetch(`${API_HOST}/system/status`);
+    if (!response.ok) {
+        throw new Error(`Failed to get system status`);
+    }
     const responseData = await response.json();
     return responseData;
 }

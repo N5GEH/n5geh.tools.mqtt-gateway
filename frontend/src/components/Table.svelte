@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchData, updateData, deleteData } from './api';
-  import { data, currentlyEditing, tempData } from './stores';
+  import { fetchData, updateData, deleteData } from '../services/api';
+  import { data, currentlyEditing, tempData } from '../stores/stores';
+  import { refreshData } from '../services/dataService';
 
-  import type { Datapoint } from './api';
+  import type { Datapoint, DatapointUpdate } from '../services/api';
 
   function editData(datapoint: Datapoint): void {
   // This is called when the user clicks the edit button in the table
@@ -12,20 +13,32 @@
   tempData.set({ ...datapoint });
 }
 
-function cancelEditing(): void {
-  // This is called when the user clicks the cancel button after editing a datapoint in the table
-  // It resets the currentlyEditing variable and the tempData variable and cancels the edit
-  currentlyEditing.set(null);
-  tempData.set(null);
-}
+  function cancelEditing(): void {
+    // This is called when the user clicks the cancel button after editing a datapoint in the table
+    // It resets the currentlyEditing variable and the tempData variable and cancels the edit
+    currentlyEditing.set(null);
+    tempData.set(null);
+  }
 
-  onMount(async () => {
+  async function handleDelete(object_id: string): Promise<void> {
     try {
-      data.set(await fetchData());
+      await deleteData(object_id);
+      await refreshData(); // Refresh the table
     } catch (e) {
-      console.error('An error occurred while fetching the data:', e);
+      console.error('An error occurred while deleting the data:', e);
     }
-  });
+  }
+
+  async function handleUpdate(datapoint: DatapointUpdate): Promise<void> {
+    try {
+      await updateData(datapoint);
+      await refreshData(); // Refresh the table
+    } catch (e) {
+      console.error('An error occurred while updating the data:', e);
+    }
+  }
+
+  onMount(refreshData);
 </script>
 
 <html lang="en">
@@ -90,7 +103,7 @@ function cancelEditing(): void {
                   {:else}
                     <!-- same reason as above -->
                     <button on:click={() => editData(row)}>{row.status ? 'Reconfigure' : 'Configure'}</button>
-                    <button on:click={() => deleteData(row.object_id)}>Delete</button>
+                    <button on:click={() => handleDelete(row.object_id)}>Delete</button>
                   {/if}
               </tr>
             {/each}
