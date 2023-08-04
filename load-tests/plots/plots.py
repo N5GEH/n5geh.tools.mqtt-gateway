@@ -71,8 +71,8 @@ def plot_percentage_loss(
     ax.legend([scatter], ["Message Percentage Lost"], fontsize=14)
 
     fig.tight_layout()
-    plt.savefig(f"tests/results/{TEST_ENV}_message_loss_percentage.png")
-    with open(f"tests/results/pickles/{TEST_ENV}_message_loss_percentage.pickle", "wb") as f:
+    plt.savefig(f"load-tests/results/{TEST_ENV}_message_loss_percentage.png")
+    with open(f"load-tests/results/pickles/{TEST_ENV}_message_loss_percentage.pickle", "wb") as f:
         pickle.dump((messages_sent, messages_received, messages_per_second), f, pickle.HIGHEST_PROTOCOL)
     plt.show()
 
@@ -122,8 +122,8 @@ def plot_message_loss(
         )
 
     fig.tight_layout()
-    plt.savefig(f"tests/results/{TEST_ENV}_message_loss_bar.png")
-    with open(f"tests/results/pickles/{TEST_ENV}_message_loss_bar.pickle", "wb") as f:
+    plt.savefig(f"load-tests/results/{TEST_ENV}_message_loss_bar.png")
+    with open(f"load-tests/results/pickles/{TEST_ENV}_message_loss_bar.pickle", "wb") as f:
         pickle.dump((messages_sent, messages_received, messages_per_second), f, pickle.HIGHEST_PROTOCOL)
     plt.show()
 
@@ -150,8 +150,8 @@ def plot_latency(
     ax.grid(True)
 
     fig.tight_layout()
-    plt.savefig(f"tests/results/{TEST_ENV}_latency.png")
-    with open(f'tests/results/pickles/{TEST_ENV}_latencies.pickle', 'wb') as f:
+    plt.savefig(f"load-tests/results/{TEST_ENV}_latency.png")
+    with open(f'load-tests/results/pickles/{TEST_ENV}_latencies.pickle', 'wb') as f:
         pickle.dump((messages_per_second, latencies), f, protocol=pickle.HIGHEST_PROTOCOL)
     plt.show()
 
@@ -179,7 +179,7 @@ def plot_pie_chart():
     
     plt.tight_layout()
     # Display the pie chart
-    plt.savefig(f"tests/results/pie_chart.png")
+    plt.savefig(f"load-tests/results/pie_chart.png")
     plt.show()
 
 

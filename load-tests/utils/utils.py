@@ -1,6 +1,6 @@
 """
-This module contains utility functions that are used by the tests.
-Depending on the TEST_ENV environment variable, the tests will be run in baseline or gateway mode.
+This module contains utility functions that are used by the load-tests.
+Depending on the TEST_ENV environment variable, the load-tests will be run in baseline or gateway mode.
 """
 
 import asyncio
