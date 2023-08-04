@@ -43,7 +43,7 @@ class TestInit(unittest.TestCase):
             **{
                 "object_id": self.unmatched_object_id,
                 "topic": "topic/of/dp_basis:002",
-                "jsonpath": "$../data2"
+                "jsonpath": "$..data2"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
@@ -54,7 +54,7 @@ class TestInit(unittest.TestCase):
             **{
                 "object_id": self.matched_object_id,
                 "topic": "topic/of/dp_basis:001",
-                "jsonpath": "$../data1",
+                "jsonpath": "$..data1",
                 "matchDatapoint": True,
                 "entity_id": self.test_entity.id,
                 "entity_type": self.test_entity.type,
