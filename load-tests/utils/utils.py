@@ -8,7 +8,7 @@ import json
 import os
 import time
 from random import randint
-from typing import Dict, Union
+from typing import Dict, Union, Tuple
 
 import aiohttp
 from asyncio_mqtt import Client as MQTTClient
@@ -27,7 +27,7 @@ async def generate_random_string(length: int = 10) -> str:
     return "".join([chr(randint(97, 122)) for _ in range(length)])
 
 
-async def generate_entity() -> Union[str, str, str, str]:
+async def generate_entity() -> Union[Tuple[str, str, str, str]]:
     """
     Generate a random entity with a random attribute. This is used to test whether the matching works properly
     as well as to create an entity that is not already registered in the Context Broker.
@@ -59,15 +59,19 @@ async def generate_payload(attribute_name: str = "") -> str:
     return json.dumps({fake_attribute: randint(0, 1000), attribute_name: time.time()})
 
 
-async def generate_fiware_header() -> None | Dict[str, str]:
+async def generate_fiware_header():
     """
     Generate the FIWARE headers for the requests. This is used to test whether the matching works properly.
     """
     if TEST_ENV not in ["baseline", "gateway1x", "gateway4x"]:
         raise ValueError("TEST_ENV must be either 'baseline' or 'gateway'")
+    # return {
+    #     "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",
+    #     "fiware-servicepath": "/baseline" if TEST_ENV == "baseline" else "/gateway",
+    # }
     return {
-        "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",
-        "fiware-servicepath": "/baseline" if TEST_ENV == "baseline" else "/gateway",
+        "fiware-service": "gateway_test",
+        "fiware-servicepath": "/",
     }
 
 
@@ -76,18 +80,15 @@ async def register_entity(
     entity_id: str,
     entity_type: str,
     attribute_name: str,
-) -> None:
+):
     return await session.post(
-        "http://localhost:1026/v2/entities",
+        "http://137.226.248.161:1026/v2/entities",
         json={
             "id": entity_id,
             "type": entity_type,
             attribute_name: {"value": 0, "type": "Number"},
         },
-        headers={
-            "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",
-            "fiware-servicepath": "/baseline" if TEST_ENV == "baseline" else "/gateway",
-        },
+        headers = await generate_fiware_header(),
     )
 
 
@@ -97,9 +98,9 @@ async def register_device(
     entity_id: str,
     entity_type: str,
     attribute_name: str,
-) -> None:
+):
     return await session.post(
-        "http://localhost:4041/iot/devices",
+        "http://137.226.248.161:4041/iot/devices",
         json={
             "devices": [
                 {
@@ -114,8 +115,7 @@ async def register_device(
                             "name": attribute_name,
                             "type": "Number",
                         }
-                    ],
-                    "transport": "MQTT",
+                    ]
                 }
             ]
         },
@@ -128,9 +128,9 @@ async def generate_subscription(
     entity_id: str,
     entity_type: str,
     attribute_name: str,
-) -> None:
+):
     return await session.post(
-        "http://localhost:1026/v2/subscriptions",
+        "http://137.226.248.161:1026/v2/subscriptions",
         json={
             "description": f"Baseline test subscription for {entity_id}:{attribute_name}",
             "subject": {
@@ -139,9 +139,9 @@ async def generate_subscription(
             },
             "notification": {
                 "mqtt": {
-                    "url": "mqtt://host.docker.internal:1883",
+                    "url": "mqtt://mosquitto:1883",
                     "qos": 0,
-                    "topic": "test/timestamp",
+                    "topic": f"test/timestamp/{randint(0,3)}",
                 },
                 "attrs": [attribute_name],
                 "metadata": ["dateCreated", "dateModified"],
@@ -153,7 +153,7 @@ async def generate_subscription(
 
 
 async def generate_client(
-    event: asyncio.Event, mqtt_hostname: str = "localhost", mqtt_port: int = 1883
+    event: asyncio.Event, mqtt_hostname: str = "137.226.248.161", mqtt_port: int = 1883
 ):
     """
     Generate a client and publish a payload to the test/latency topic every second.
