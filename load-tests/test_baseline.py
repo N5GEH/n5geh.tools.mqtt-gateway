@@ -14,7 +14,8 @@ from filip.models.base import FiwareHeader
 from filip.utils.cleanup import clear_context_broker, clear_iot_agent
 from jsonpath_ng import parse as parse_jsonpath
 from plots.plots import plot_latency, plot_message_loss, plot_percentage_loss
-from utils.utils import generate_entity, generate_payload, register_device, register_entity, generate_subscription
+from utils.utils import generate_entity, generate_payload, register_device, register_entity, generate_subscription, \
+    save_results_after_stage
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
 import random
@@ -163,8 +164,7 @@ async def generate_clients(
         # Wait for all tasks to complete their cancellation
         await asyncio.gather(*tasks, return_exceptions=True)
         # save the results to a pickle file
-        # TODO
-        # save_results_after_stage(messages_sent, messages_received, latencies, stage)
+        save_results_after_stage(messages_sent, messages_received, latencies, stage)
     finally:
         # Cancel all tasks
         for task in tasks:
