@@ -9,13 +9,13 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Copy requirements.txt
-COPY ./backend/requirements.txt ./
+COPY requirements.txt ./
 
 # Install dependencies
 RUN pip install -r requirements.txt
 
 # Copy source code
-COPY ./backend/ ./
+COPY . ./
 
 # Expose application on port 8000
 EXPOSE 8000
@@ -24,7 +24,7 @@ EXPOSE 8000
 RUN apt-get update && apt-get install -y supervisor
 
 # Copy supervisord.conf
-COPY ./backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Run the app with supervisord
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
