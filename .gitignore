@@ -355,3 +355,4 @@ package
 .venv3.9
 .vscode
 archive
+/.idea
