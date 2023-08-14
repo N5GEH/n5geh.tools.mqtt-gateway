@@ -1,7 +1,7 @@
-# IoT Gateway
+# MQTT Gateway
 
 ## Overview
-This is a project for my Bachelor's thesis. It is a simple software-based IoT Gateway that allows to control devices connected to it via a web interface. The gateway is written in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework. The frontend is written in [Svelte](https://svelte.dev/).
+This is a universal MQTT gateway for the NGSI-V2 Context broker. It can support any MQTT-based sensor data communication using JSON as the payload. It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte](https://svelte.dev/).
 
 
 ## Installation
