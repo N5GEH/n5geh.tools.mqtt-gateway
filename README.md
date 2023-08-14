@@ -29,6 +29,11 @@ docker compose up -d
 Please only use this platform setup for testing purposes.
 
 ### Deployment
+Before deploying the gateway via docker containers, the environment variables need to be configured in `.env` data.
+This can be created from a copy of the `env.EXAMPLE`.
+The default values can be directly used for the test deployment.  
+Check [here](https://github.com/N5GEH/n5geh.tools.mqtt-gateway#environment-variables) for more information about the environment variables
+
 #### Pull docker image
 Coming soon
 
