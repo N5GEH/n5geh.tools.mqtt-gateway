@@ -5,6 +5,13 @@ This is a universal MQTT gateway for the NGSI-V2 context broker. It can support 
 
 
 ## Quickstart
+Clone the repository to your local environment.
+```bash
+git clone https://github.com/N5GEH/n5geh.tools.mqtt-gateway.git
+cd n5geh.tools.mqtt-gateway/
+```
+
+
 ### Requirement
 The MQTT gateway acts as a southbound interface of the NGSI-V2 context broker.
 Its operation requires an MVP FIWARE platform with at least two components:
@@ -12,7 +19,13 @@ Its operation requires an MVP FIWARE platform with at least two components:
 - MQTT Broker
 
 If you are new to the FIWARE platform, it is highly recommended to start with the [platform tutorials](https://github.com/N5GEH/n5geh.platform).
-TODO Otherwise, a `docker-compose.yml` is also provided in this repo.
+Otherwise, a `docker-compose.yml` is also provided in this repo.
+Set up this MVP FIWARE platform with:
+```bash
+cd fiware-environment
+docker compose pull
+docker compose up -d
+```
 Please only use this platform setup for testing purposes.
 
 ### Deployment
@@ -23,7 +36,9 @@ Coming soon
 The repository contains a `docker-compose.yml` file that can be used to start the gateway and all the necessary services.
 The gateway can be started with the following command:
 ```bash
-docker-compose build && docker-compose up -d
+cd n5geh.tools.mqtt-gateway/
+docker compose build
+docker compose up -d
 ```
 
 ### API interaction
