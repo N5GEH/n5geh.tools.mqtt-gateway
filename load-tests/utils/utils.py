@@ -8,12 +8,14 @@ import json
 import os
 import time
 from random import randint
-from typing import Dict, Union
+from typing import Union, Tuple
+import pickle
 
 import aiohttp
 from asyncio_mqtt import Client as MQTTClient
 
-TEST_ENV = os.environ.get("TEST_ENV", "gateway4x")
+TEST_ENV = os.environ.get("TEST_ENV", "gateway1x")
+HOST_URL = "137.226.248.161"
 
 
 async def generate_random_string(length: int = 10) -> str:
@@ -27,7 +29,7 @@ async def generate_random_string(length: int = 10) -> str:
     return "".join([chr(randint(97, 122)) for _ in range(length)])
 
 
-async def generate_entity() -> Union[str, str, str, str]:
+async def generate_entity() -> Union[Tuple[str, str, str, str]]:
     """
     Generate a random entity with a random attribute. This is used to test whether the matching works properly
     as well as to create an entity that is not already registered in the Context Broker.
@@ -59,26 +61,30 @@ async def generate_payload(attribute_name: str = "") -> str:
     return json.dumps({fake_attribute: randint(0, 1000), attribute_name: time.time()})
 
 
-async def generate_fiware_header() -> None | Dict[str, str]:
+async def generate_fiware_header():
     """
     Generate the FIWARE headers for the requests. This is used to test whether the matching works properly.
     """
     if TEST_ENV not in ["baseline", "gateway1x", "gateway4x"]:
         raise ValueError("TEST_ENV must be either 'baseline' or 'gateway'")
+    # return {
+    #     "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",
+    #     "fiware-servicepath": "/baseline" if TEST_ENV == "baseline" else "/gateway",
+    # }
     return {
-        "fiware-service": "baseline" if TEST_ENV == "baseline" else "gateway",
-        "fiware-servicepath": "/baseline" if TEST_ENV == "baseline" else "/gateway",
+        "fiware-service": "gateway_test",
+        "fiware-servicepath": "/",
     }
 
 
 async def register_entity(
-    session: aiohttp.ClientSession,
-    entity_id: str,
-    entity_type: str,
-    attribute_name: str,
-) -> None:
+        session: aiohttp.ClientSession,
+        entity_id: str,
+        entity_type: str,
+        attribute_name: str,
+):
     return await session.post(
-        "http://localhost:1026/v2/entities",
+        f"http://{HOST_URL}:1026/v2/entities",
         json={
             "id": entity_id,
             "type": entity_type,
@@ -92,14 +98,14 @@ async def register_entity(
 
 
 async def register_device(
-    session: aiohttp.ClientSession,
-    device_id: str,
-    entity_id: str,
-    entity_type: str,
-    attribute_name: str,
-) -> None:
+        session: aiohttp.ClientSession,
+        device_id: str,
+        entity_id: str,
+        entity_type: str,
+        attribute_name: str,
+):
     return await session.post(
-        "http://localhost:4041/iot/devices",
+        f"http://{HOST_URL}:4041/iot/devices",
         json={
             "devices": [
                 {
@@ -114,8 +120,7 @@ async def register_device(
                             "name": attribute_name,
                             "type": "Number",
                         }
-                    ],
-                    "transport": "MQTT",
+                    ]
                 }
             ]
         },
@@ -124,13 +129,14 @@ async def register_device(
 
 
 async def generate_subscription(
-    session: aiohttp.ClientSession,
-    entity_id: str,
-    entity_type: str,
-    attribute_name: str,
-) -> None:
+        session: aiohttp.ClientSession,
+        entity_id: str,
+        entity_type: str,
+        attribute_name: str,
+):
+    listener_id = randint(0, 3)
     return await session.post(
-        "http://localhost:1026/v2/subscriptions",
+        f"http://{HOST_URL}:1026/v2/subscriptions",
         json={
             "description": f"Baseline test subscription for {entity_id}:{attribute_name}",
             "subject": {
@@ -139,9 +145,9 @@ async def generate_subscription(
             },
             "notification": {
                 "mqtt": {
-                    "url": "mqtt://host.docker.internal:1883",
+                    "url": f"mqtt://{HOST_URL}:1883",
                     "qos": 0,
-                    "topic": "test/timestamp",
+                    "topic": f"test/timestamp/{listener_id}",
                 },
                 "attrs": [attribute_name],
                 "metadata": ["dateCreated", "dateModified"],
@@ -153,7 +159,7 @@ async def generate_subscription(
 
 
 async def generate_client(
-    event: asyncio.Event, mqtt_hostname: str = "localhost", mqtt_port: int = 1883
+        event: asyncio.Event, mqtt_hostname: str = "localhost", mqtt_port: int = 1883
 ):
     """
     Generate a client and publish a payload to the test/latency topic every second.
@@ -176,3 +182,19 @@ async def generate_client(
                 await asyncio.sleep(1)
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
+def save_results_after_stage(messages_sent: list, messages_received: list, latencies: list, stage: int) -> None:
+    """
+    Save the results after each stage of the benchmarking process using pickle. This is used to calculate the latency and throughput.
+    """
+    with open(f"tests/results/pickles/results_{TEST_ENV}_{stage}.pkl", "wb") as f:
+        pickle.dump(
+            {
+                "messages_sent": messages_sent,
+                "messages_received": messages_received,
+                "latencies": latencies,
+                "stage": stage,
+            },
+            f,
+        )

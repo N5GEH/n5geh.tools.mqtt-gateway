@@ -1,4 +1,5 @@
 import json
+import time
 from backend.api.main import Datapoint
 from test_init import TestInit
 from test_settings import settings
@@ -17,17 +18,17 @@ class TestForwarding(TestInit):
             'Accept': 'application/json'
         }
 
-        self.value_1 = random.random()
+        self.value_1 = round(random.random(), 4)
         self.payload_dict1 = {
             "data1": self.value_1
         }
 
-        self.value_2 = random.random()
+        self.value_2 = round(random.random(), 4)
         self.payload_dict2 = {
             "level1": {
                 "level2": {
                     "level3": {
-                        "data1": self.value_1
+                        "data1": self.value_2
                     }
                 }
             }
@@ -47,7 +48,7 @@ class TestForwarding(TestInit):
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
                                     data=self.matched_datapoint2.json())
-        self.value_3 = random.random()
+        self.value_3 = round(random.random(), 4)
         self.payload_dict3 = {
             "level1": {
                 "level2": {
@@ -70,6 +71,7 @@ class TestForwarding(TestInit):
             topic=self.matched_datapoint.topic,
             payload=json.dumps(self.payload_dict1)
         )
+        time.sleep(1)
         # query data from CB
         res1 = self.cbc.get_attribute_value(
             entity_id=self.matched_datapoint.entity_id,
@@ -85,6 +87,7 @@ class TestForwarding(TestInit):
             topic=self.matched_datapoint.topic,
             payload=json.dumps(self.payload_dict2)
         )
+        time.sleep(1)
         # query data from CB
         res2 = self.cbc.get_attribute_value(
             entity_id=self.matched_datapoint.entity_id,
@@ -100,6 +103,7 @@ class TestForwarding(TestInit):
             topic=self.matched_datapoint.topic,
             payload=json.dumps(self.payload_dict3)
         )
+        time.sleep(1)
         # query data from CB
         res3 = self.cbc.get_attribute_value(
             entity_id=self.matched_datapoint2.entity_id,

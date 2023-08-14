@@ -22,14 +22,18 @@ from utils.utils import (
     register_entity,
 )
 
-GATEWAY_URL = "http://localhost:8000"
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import cpu_count
 
-FIWARE_HEADER = FiwareHeader(service="gateway", service_path="/gateway")
+HOST_URL = "137.226.248.161"
+GATEWAY_URL = f"http://{HOST_URL}:8000"
 
-mqtt_broker_address = "localhost"
-orion_address = "http://localhost:1026"
+FIWARE_HEADER = FiwareHeader(service="gateway_test", service_path="/")
 
-max_clients = 500
+mqtt_broker_address = HOST_URL
+orion_address = f"http://{HOST_URL}:1026"
+
+max_clients = 450
 initial_clients = 50
 client_step = 50
 creation_interval = 30
@@ -41,16 +45,22 @@ messages_per_second = [0] * stage_count
 latencies = defaultdict(list)
 
 stage = 0
+lock = asyncio.Lock()
 
 last_message_received = asyncio.Event()
 generate_messages = asyncio.Event()
 
+jsonpath_expr = parse_jsonpath("$..value")
+jsonpath_expr_modified = parse_jsonpath("$..dateModified.value")
+
+process_executor = ProcessPoolExecutor(max_workers=cpu_count())
+
 
 async def register_datapoint(
-    session: aiohttp.ClientSession,
-    entity_id: str,
-    entity_type: str,
-    attribute_name: str,
+        session: aiohttp.ClientSession,
+        entity_id: str,
+        entity_type: str,
+        attribute_name: str,
 ) -> None:
     """
     Register a new datapoint for the given entity in the gateway using the API.
@@ -79,27 +89,27 @@ async def clear_gateway() -> None:
         await session.delete(f"{GATEWAY_URL}/data")
 
 
-async def receive_mqtt_notification() -> None:
-    """
-    Receive the notification from the Orion Context Broker via MQTT and calculate the latency.
-    I will make use of the DateModified metadata field to calculate the latency. This field is automatically
-    added by the Orion Context Broker and contains the timestamp of the last update of the entity. We can then
-    calculate the latency by subtracting the timestamp attribute of the entity from the DateModified attribute.
-    """
-    async with asyncio_mqtt.Client("localhost") as client:
-        await client.subscribe("test/timestamp")
+def process_message(message):
+    last_message_received.set()
+    payload = json.loads(message.payload)
+    payload_timestamp = jsonpath_expr.find(payload)[0].value
+    date_modified = parse(
+        jsonpath_expr_modified.find(payload)[0].value
+    ).timestamp()
+    latency = (date_modified - payload_timestamp) * 1000
+    return latency
+
+
+async def receive_mqtt_notification(listener_id: int) -> None:
+    async with MQTTClient(HOST_URL, keepalive=60000) as client:
+        await client.subscribe(f"test/timestamp/{listener_id}")
         async with client.messages() as messages:
             async for message in messages:
-                messages_received[stage] += 1
-                print(f"Received message {messages_received[stage]}")
-                last_message_received.set()
-                payload = json.loads(message.payload)
-                payload_timestamp = parse_jsonpath("$..value").find(payload)[0].value
-                date_modified = parse(
-                    parse_jsonpath("$..dateModified.value").find(payload)[0].value
-                ).timestamp()
-                latency = (date_modified - payload_timestamp) * 1000
+                latency = await asyncio.get_running_loop().run_in_executor(process_executor, process_message, message)
+                async with lock:
+                    messages_received[stage] += 1
                 latencies[stage].append(latency)
+                print(f"Received message {messages_received[stage]}")
 
 
 async def generate_client() -> None:
@@ -109,28 +119,54 @@ async def generate_client() -> None:
     a real and a fake attribute and a timestamp. The real attribute is used to test whether the matching works
     properly, while the timestamp is used to calculate the latency.
     """
+    device_id, entity_id, entity_type, attribute_name = await generate_entity()
+    local_counter = [0] * stage_count
     try:
-        device_id, entity_id, entity_type, attribute_name = await generate_entity()
         async with aiohttp.ClientSession() as session:
-            await register_datapoint(session, entity_id, entity_type, attribute_name)
-            await register_entity(session, entity_id, entity_type, attribute_name)
-            await generate_subscription(session, entity_id, entity_type, attribute_name)
-        async with MQTTClient(mqtt_broker_address) as client:
-            await client.connect()
+            await register_datapoint(
+                session,
+                entity_id,
+                entity_type,
+                attribute_name
+            )
+            # register a new entity with the Context Broker
+            await register_entity(
+                session,
+                entity_id,
+                entity_type,
+                attribute_name,
+            )
+            # generate a corresponding subscription
+            await generate_subscription(
+                session,
+                entity_id,
+                entity_type,
+                attribute_name,
+            )
+    except Exception as e:
+        pass
+    # start the client
+    try:
+        async with MQTTClient(HOST_URL, client_id=device_id, keepalive=60000) as client:
             while True:
                 await generate_messages.wait()
-                await asyncio.sleep(1)
                 await client.publish(
                     f"test/{entity_id}",
-                    await generate_payload(attribute_name=attribute_name),
+                    await generate_payload(attribute_name),
                 )
-                messages_sent[stage] += 1
+                local_counter[stage] += 1
+                # If the event is not set, it means it is blocking
+                await asyncio.sleep(1)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred while publishing the payload: {e}")
+    finally:
+        # Update messages_sent when the function ends
+        for i in range(len(messages_sent)):
+            messages_sent[i] += local_counter[i]
 
 
 async def generate_clients(
-    initial_clients: int, client_step: int, creation_interval: int
+        initial_clients: int, client_step: int, creation_interval: int
 ) -> None:
     """
     Generate a number of clients and publish a payload to the test/latency topic every second (potentially one could extend this to publish to different topics as well).
@@ -144,8 +180,6 @@ async def generate_clients(
         creation_interval (int): The interval between the creation of new clients.
     """
     tasks = []
-    logger = Logger.with_default_handlers(name="benchmark")
-    logger.add_handler(AsyncFileHandler("benchmark.log", mode="a"))
     try:
         global stage
         for _ in range(max_clients // client_step):
@@ -172,7 +206,7 @@ async def generate_clients(
         plot_percentage_loss(messages_sent, messages_received, messages_per_second)
         plot_latency(messages_per_second, latencies)
         await clear_gateway()
-        clear_context_broker("http://localhost:1026", FIWARE_HEADER)
+        clear_context_broker(orion_address, FIWARE_HEADER)
 
 
 async def wait_for_last_stage_message(wait_time: int = 5):
@@ -198,13 +232,15 @@ async def main():
     Otherwise due to the async nature of the code, the code would continue running and the server would not be closed.
     """
     try:
-        clear_context_broker("http://localhost:1026", FIWARE_HEADER)
+        clear_context_broker(orion_address, FIWARE_HEADER)
         await clear_gateway()
         test_clients = asyncio.create_task(
             generate_clients(initial_clients, client_step, creation_interval)
         )
-        sub_listen = asyncio.create_task(receive_mqtt_notification())
-        await asyncio.gather(test_clients, sub_listen)
+        listeners = [
+            asyncio.create_task(receive_mqtt_notification(i)) for i in range(4)
+        ]
+        await asyncio.gather(test_clients, *listeners)
     except KeyboardInterrupt:
         print("Received exit signal. Shutting down...")
         for task in asyncio.all_tasks():
@@ -212,7 +248,10 @@ async def main():
         await clear_gateway()
         print("Shutdown complete.")
         sys.exit(0)
+    except Exception as e:
+        print(f"An error occurred in main: {e}")
 
 
 if __name__ == "__main__":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

@@ -49,7 +49,8 @@ class MqttGateway(Client):
     def __init__(self):
         super().__init__(hostname=MQTT_HOST)
         # Create gateway device
-        self.queue = asyncio.PriorityQueue()  # Queue for storing incoming messages
+        self.mqtt_queue = asyncio.Queue()
+        self.redis_queue = asyncio.Queue()
         self.workers = []  # List of worker tasks
         self.cache = aioredis.from_url(
             url=f"{REDIS_URL}/0"
@@ -61,41 +62,32 @@ class MqttGateway(Client):
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
 
-    async def worker(self, client: Client) -> None:
-        """
-        Worker task that processes incoming messages from the queue.
-
-        Args:
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
-        """
+    async def mqtt_worker(self, client: Client) -> None:
         async with aiohttp.ClientSession() as worker_session:
-            async with Client(MQTT_HOST) as worker_client:
+            async with Client(MQTT_HOST, keepalive=60000) as worker_client:
                 while True:
-                    # Wait for a message from the queue
                     try:
-                        _, source, *message = await self.queue.get()
-                        if source == "redis":
-                            await self.process_redis_message(*message, client=client)
-                        elif source == "mqtt":
-                            await self.process_mqtt_message(
-                                *message, worker_client, worker_session
-                            )
-                        else:
-                            self.logger.error(f"Unknown source: {source}")
-                        self.queue.task_done()
+                        topic, payload = await self.mqtt_queue.get()
+                        await self.process_mqtt_message(topic, payload, worker_client, worker_session)
+                        self.mqtt_queue.task_done()
                     except Exception as e:
                         self.logger.error(e)
                         continue
 
-    async def start_workers(self, client: Client) -> None:
-        """
-        Starts the worker tasks.
+    async def redis_worker(self, client: Client) -> None:
+        while True:
+            try:
+                data = await self.redis_queue.get()
+                await self.process_redis_message(data, client=client)
+                self.redis_queue.task_done()
+            except Exception as e:
+                self.logger.error(e)
+                continue
 
-        Args:
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
-        """
-        workers = [asyncio.create_task(self.worker(client)) for _ in range(12)]
-        await asyncio.gather(*workers)
+    async def start_workers(self, client: Client) -> None:
+        mqtt_workers = [asyncio.create_task(self.mqtt_worker(client)) for _ in range(12)]
+        redis_workers = [asyncio.create_task(self.redis_worker(client)) for _ in range(4)]
+        await asyncio.gather(*(mqtt_workers + redis_workers))
 
     async def process_redis_message(
         self, message: bytes, client: Client
@@ -127,7 +119,7 @@ class MqttGateway(Client):
             self.logger.info(f"Done processing command: {command} {topic}")
 
     async def process_mqtt_message(
-        self, message: Tuple[str, str], client: Client, session: aiohttp.ClientSession
+        self, topic: str, message: str, client: Client, session: aiohttp.ClientSession
     ) -> None:
         """
         Processes a single MQTT message.
@@ -135,8 +127,6 @@ class MqttGateway(Client):
         Args:
             message (Tuple[str, str, Client]): A tuple containing the topic, the payload, and the MQTT client used by the gateway.
         """
-        topic, payload = message
-
         # Get all datapoints for the topic from the cache
         # If the topic is not in the cache, ask Postgres
         if not await self.cache.hlen(topic):
@@ -162,7 +152,7 @@ class MqttGateway(Client):
             # Get the value from the payload using jsonpath
             value = (
                 parse(datapoint["jsonpath"])
-                .find(json.loads(payload.decode("utf-8")))[0]
+                .find(json.loads(message.decode("utf-8")))[0]
                 .value
             )
             if value:
@@ -205,8 +195,8 @@ class MqttGateway(Client):
             print(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
-                self.queue.put_nowait(
-                    (1, "mqtt", (str(message.topic), message.payload))
+                self.mqtt_queue.put_nowait(
+                    ((str(message.topic), message.payload))
                 )
 
     async def redis_listener(self, client: Client) -> None:
@@ -243,7 +233,7 @@ class MqttGateway(Client):
                         message_id, data = payload[0]
                         print(f"Received message {message_id}")
                         print(f"Received data {data}")
-                        self.queue.put_nowait((0, "redis", data))
+                        self.redis_queue.put_nowait(data)
                         await self.notifier.xack(stream_name, group_name, message_id.decode("utf-8"))
             except asyncio.TimeoutError:
                 pass

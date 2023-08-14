@@ -122,6 +122,7 @@ def plot_message_loss(
         )
 
     fig.tight_layout()
+    # TODO
     plt.savefig(f"load-tests/results/{TEST_ENV}_message_loss_bar.png")
     with open(f"load-tests/results/pickles/{TEST_ENV}_message_loss_bar.pickle", "wb") as f:
         pickle.dump((messages_sent, messages_received, messages_per_second), f, pickle.HIGHEST_PROTOCOL)
@@ -185,4 +186,4 @@ def plot_pie_chart():
 
 # in case one needs to plot the data again using the pickles
 if __name__ == "__main__":
-
+    pass
