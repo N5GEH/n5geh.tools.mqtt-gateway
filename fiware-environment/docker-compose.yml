@@ -1,0 +1,60 @@
+version: '3.8'
+services:
+  orion:
+    image: telefonicaiot/fiware-orion:3.8.1
+    hostname: orion
+    container_name: orion
+    depends_on:
+      - mongo-db
+    networks:
+      - default
+    ports:
+      - "1026:1026"
+    command: -dbhost mongo-db
+    healthcheck:
+      test: curl --fail -s http://localhost:1026/version || exit 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  mongo-db:
+    image: mongo:4.4
+    hostname: mongo-db
+    container_name: mongo-db
+    expose:
+      - "27017"
+    networks:
+      - default
+    command: --nojournal
+    volumes:
+      - mongo-db:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongo-db:27017/test --quiet
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0.14
+    restart: always
+    hostname: mosquitto
+    container_name: mosquitto
+    networks:
+      - default
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test: mosquitto_sub -h localhost -t test -C 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    volumes:
+        - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+volumes:
+  mongo-db: # internal name
+    name: mongodb # displayed name
+
+networks:
+  default:
+    name: fiware
