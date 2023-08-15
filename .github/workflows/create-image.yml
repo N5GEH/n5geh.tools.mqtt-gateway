@@ -20,13 +20,13 @@ jobs:
       matrix:
         include:
           - dockerfile: ./backend/Dockerfile
-            image: ${{ env.REGISTRY }}/backend
+            image: backend
             context: ./backend
           - dockerfile: ./frontend/Dockerfile
-            image: ${{ env.REGISTRY }}/frontend
+            image: frontend
             context: ./frontend
           - dockerfile: ./backend/api/Dockerfile
-            image: ${{ env.REGISTRY }}/api
+            image: api
             context: ./backend/api
     permissions:
       contents: read
@@ -46,7 +46,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.image }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
