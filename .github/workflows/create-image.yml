@@ -15,6 +15,19 @@ env:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: ./backend/Dockerfile
+            image: ${{ env.REGISTRY }}/backend
+            context: ./backend
+          - dockerfile: ./frontend/Dockerfile
+            image: ${{ env.REGISTRY }}/frontend
+            context: ./frontend
+          - dockerfile: ./backend/api/Dockerfile
+            image: ${{ env.REGISTRY }}/api
+            context: ./backend/api
     permissions:
       contents: read
       packages: write
@@ -33,13 +46,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ matrix.image }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.Dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
