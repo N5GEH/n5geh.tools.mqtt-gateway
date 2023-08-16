@@ -1,4 +1,4 @@
-name: Create Docker Image for backend
+name: Create Docker Images for MQTT-Gateway
 
 on:
   push:
@@ -19,9 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: ./backend/Dockerfile
-            image: backend
-            context: ./backend
+          - dockerfile: ./backend/gateway/Dockerfile
+            image: gateway
+            context: ./backend/gateway
           - dockerfile: ./frontend/Dockerfile
             image: frontend
             context: ./frontend
