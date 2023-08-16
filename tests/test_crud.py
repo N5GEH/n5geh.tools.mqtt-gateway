@@ -15,6 +15,7 @@ class TestCRUD(TestInit):
         pass
 
     def test_create(self):
+        # TODO the object ID will be created by gateway
         headers = {
             'Accept': 'application/json'
         }
@@ -22,19 +23,18 @@ class TestCRUD(TestInit):
         # create not matched
         datapoint1 = Datapoint(
             **{
-                "object_id": "dp_crud:001",
                 "topic": "topic/of/crud",
                 "jsonpath": "$../data1"
             }
         )
         response1 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                                      data=datapoint1.json())
+        object_id1 = response1.json()["object_id"]
         self.assertTrue(response1.ok)
 
         # create matched
         datapoint2 = Datapoint(
             **{
-                "object_id": "dp_crud:002",
                 "topic": "topic/of/crud",
                 "jsonpath": "$../data2",
                 "matchDatapoint": True,
@@ -45,12 +45,12 @@ class TestCRUD(TestInit):
         )
         response2 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                                      data=datapoint2.json())
+        object_id2 = response2.json()["object_id"]
         self.assertTrue(response2.ok)
 
         # create not matched while checked matched flag
         datapoint3 = Datapoint(
             **{
-                "object_id": "dp_crud:003",
                 "topic": "topic/of/crud",
                 "jsonpath": "$../data3",
                 "matchDatapoint": True
@@ -63,7 +63,6 @@ class TestCRUD(TestInit):
         # create matched DP while left match flag unchecked
         datapoint4 = Datapoint(
             **{
-                "object_id": "dp_crud:004",
                 "topic": "topic/of/crud",
                 "jsonpath": "$../data4",
                 "matchDatapoint": False,
@@ -74,41 +73,46 @@ class TestCRUD(TestInit):
         )
         response4 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                                      data=datapoint4.json())
+        object_id4 = response4.json()["object_id"]
         self.assertTrue(response4.ok)
 
     def test_read(self):
         headers = {
             'Accept': 'application/json'
         }
-        object_id = "dp_crud:005"
         datapoint5 = Datapoint(
             **{
-                "object_id": object_id,
                 "topic": "topic/of/crud",
                 "jsonpath": "$../dat5"
             }
         )
-        requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                          data=datapoint5.json())
+        object_id = response.json()["object_id"]
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+
         self.assertEqual(
-            datapoint5,
+            datapoint5.json(include={"topic", "jsonpath"}),
             Datapoint(
                 **json.loads(response.text)
-            )
+            ).json(include={"topic", "jsonpath"})
         )
+
+    def test_duplicated(self):
+        # TODO
+        pass
 
     def test_update(self):
         headers = {
             'Accept': 'application/json'
         }
-        object_id = "dp_basis:002"
+        object_id = self.unmatched_object_id
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         datapoint_basis = Datapoint(
             **json.loads(response.text)
         )
 
-        # update topic
+        # update topic, should be rejected
         datapoint_basis1 = datapoint_basis.copy()
         datapoint_basis1.topic = datapoint_basis1.topic + "/updated"
         response1 = requests.request("PUT", settings.GATEWAY_URL + "/data/" + object_id,
@@ -128,6 +132,7 @@ class TestCRUD(TestInit):
                                      data=datapoint_basis_update.json()
                                      )
         self.assertTrue(response2.ok)
+
         # check update result
         datapoint_basis2: Datapoint = datapoint_basis.copy()
         datapoint_basis2.entity_id = self.test_entity.id
@@ -141,7 +146,7 @@ class TestCRUD(TestInit):
         )
 
     def test_delete(self):
-        object_id = "dp_basis:002"
+        object_id = self.unmatched_object_id
         response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)

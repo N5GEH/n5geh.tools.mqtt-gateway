@@ -37,7 +37,6 @@ class TestForwarding(TestInit):
         # create other json path
         self.matched_datapoint2 = Datapoint(
             **{
-                "object_id": "dp_forwarding:001",
                 "topic": "topic/of/dp_forwarding:001",
                 "jsonpath": "$.level1.level2.level3.data1",
                 "matchDatapoint": True,
