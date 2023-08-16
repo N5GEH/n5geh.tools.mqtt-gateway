@@ -9,8 +9,8 @@ services:
       - 5173:5173
     networks:
       - default
-    volumes:
-      - ./frontend:/dist  # for hot reloading
+#    volumes:
+#      - ./frontend:/dist  # for hot reloading
 
   api:
     image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/api:main
@@ -19,8 +19,8 @@ services:
       - 8000:8000
     networks:
       - default
-    volumes:
-      - ./backend/api:/app  # for hot reloading
+#    volumes:
+#      - ./backend/api:/app  # for hot reloading
     env_file:
       - .env
     deploy:
@@ -35,8 +35,8 @@ services:
     container_name: mqtt_gateway_gateway
     networks:
       - default
-    volumes:
-      - ./backend/gateway:/app  # for hot reloading
+#    volumes:
+#      - ./backend/gateway:/app  # for hot reloading
     env_file:
       - .env
     deploy:
