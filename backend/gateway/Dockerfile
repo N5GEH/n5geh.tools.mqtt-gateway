@@ -13,6 +13,8 @@ COPY requirements.txt ./
 
 # Install dependencies
 RUN pip install -r requirements.txt
+RUN pip uninstall -y pydantic
+RUN pip install pydantic[dotenv]==1.7.2
 
 # Copy source code
 COPY . ./
