@@ -1,0 +1,111 @@
+version: '3.8'
+services:
+  frontend:
+    image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/frontend:main
+    container_name: mqtt_gateway_frontend
+    env_file:
+      - .env
+    ports:
+      - 5173:5173
+    networks:
+      - default
+    volumes:
+      - ./frontend:/dist  # for hot reloading
+
+  api:
+    image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/api:main
+    container_name: mqtt_gateway_api
+    ports:
+      - 8000:8000
+    networks:
+      - default
+    volumes:
+      - ./backend/api:/app  # for hot reloading
+    env_file:
+      - .env
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  gateway:
+    image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/gateway:main
+    container_name: mqtt_gateway_gateway
+    networks:
+      - default
+    volumes:
+      - ./backend/gateway:/app  # for hot reloading
+    env_file:
+      - .env
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  postgres:
+    image: postgres:15.2
+    hostname: postgres
+    container_name: postgres
+    expose:
+      - "5432"
+    networks:
+      - default
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=iot_devices
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:7.1
+    hostname: pgadmin
+    container_name: pgadmin
+    expose:
+      - "80"
+    networks:
+      - default
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=pgadmin
+    depends_on:
+      - postgres
+    healthcheck:
+      test: curl --fail -s http://localhost:8080 || exit 1
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  redis:
+    image: redis:7.0
+    hostname: redis
+    container_name: fiware-redis
+    expose:
+      - "6379"
+    networks:
+      - default
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+volumes:
+  pgdata:
+    name: pgdata
+
+networks:
+  default:
+    name: fiware
+    external: true

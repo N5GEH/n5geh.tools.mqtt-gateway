@@ -31,16 +31,29 @@ Please only use this platform setup for testing purposes.
 ### Deployment
 Before deploying the gateway via docker containers, the environment variables need to be configured in `.env` data.
 This can be created from a copy of the `env.EXAMPLE`.
-The default values can be directly used for the test deployment.  
+The default values can be directly used for the test deployment.
 Check [here](https://github.com/N5GEH/n5geh.tools.mqtt-gateway#environment-variables) for more information about the environment variables
 
-#### Pull docker image
-Coming soon
+#### Pull docker images
+The recommended way to deploy the MQTT gateway is to use the pre-built docker images. Under the packages of this repository, you can find the images for the `gateway`, `frontend`, and `API`. In oder to pull these images, you need to first sign in to the `ghcr.io` (GitHub Container Registry).
+````commandline
+cd n5geh.tools.mqtt-gateway/
+export CR_PAT=YOUR_TOKEN
+echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+````
+`YOUR_TOKEN` (classic [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)) and `USERNAME` must be replaced with yours. Check [here](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) for more information.
 
-#### Build your own docker image
-The repository contains a `docker-compose.yml` file that can be used to start the gateway and all the necessary services.
+After the login, you should be able to pull the images and start the gateway services.
+````commandline
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+````
+
+
+#### Build your own docker images
+The repository contains a `docker-compose.yml` file that can be used to start building the image and then start the gateway services.
 The gateway can be started with the following command:
-```bash
+```commandline
 cd n5geh.tools.mqtt-gateway/
 docker compose build
 docker compose up -d
