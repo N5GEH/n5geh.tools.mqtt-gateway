@@ -13,7 +13,6 @@ import asyncpg
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
 from asyncio_mqtt import Client, MqttError
-from filip.models.base import FiwareHeader
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
@@ -23,8 +22,7 @@ MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 orion = os.environ.get("ORION_URL", "http://localhost:1026")
 service = os.environ.get("FIWARE_SERVICE", "gateway")
-servicepath = os.environ.get("FIWARE_SERVICEPATH", "/gateway")
-header = FiwareHeader(service=service, service_path=servicepath)
+service_path = os.environ.get("FIWARE_SERVICEPATH", "/gateway")
 api_key = os.environ.get("API_KEY", "plugnplay")
 
 host = os.environ.get("POSTGRES_HOST", "localhost")
@@ -168,8 +166,8 @@ class MqttGateway(Client):
                         url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
                         json=payload,
                         headers={
-                            "fiware-service": header.service,
-                            "fiware-servicepath": header.service_path,
+                            "fiware-service": service,
+                            "fiware-servicepath": service_path,
                         },
                     )
                     await self.logger.info(f"Sent {payload} to Orion Context Broker")

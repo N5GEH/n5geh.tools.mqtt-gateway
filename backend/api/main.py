@@ -43,7 +43,6 @@ class Datapoint(BaseModel):
 
 
 class DatapointUpdate(BaseModel):
-    object_id: str
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
