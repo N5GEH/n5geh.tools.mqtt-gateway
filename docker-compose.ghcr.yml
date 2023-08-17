@@ -32,7 +32,6 @@ services:
 
   gateway:
     image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/gateway:main
-    container_name: mqtt_gateway_gateway
     networks:
       - default
 #    volumes:
