@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 host = os.environ.get("POSTGRES_HOST", "localhost")
-user = os.environ.get("POSTGRES_USER", "karelia")
+user = os.environ.get("POSTGRES_USER", "admin")
 password = os.environ.get("POSTGRES_PASSWORD", "postgres")
 database = os.environ.get("POSTGRES_DB", "iot_devices")
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
@@ -206,10 +206,10 @@ async def add_datapoint(
             )
 
         # store the jsonpath and topic in redis for easy retrieval later
-        await app.state.redis.set(
-            datapoint.object_id,
-            json.dumps({"jsonpath": datapoint.jsonpath, "topic": datapoint.topic}),
-        )
+        # await app.state.redis.set(
+        #     datapoint.object_id,
+        #     json.dumps({"jsonpath": datapoint.jsonpath, "topic": datapoint.topic}),
+        # )
 
         await app.state.redis.hset(
             datapoint.topic,
@@ -334,7 +334,7 @@ async def delete_datapoint(
                 """DELETE FROM datapoints WHERE object_id=$1""", object_id
             )
 
-        await app.state.redis.delete(object_id)
+        # await app.state.redis.delete(object_id)
         await app.state.redis.hdel(datapoint["topic"], object_id)
 
         if not unsubscribe:
@@ -368,7 +368,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
             )
             await conn.execute("""DELETE FROM datapoints""")
         for datapoint in datapoints:
-            await app.state.redis.delete(datapoint["object_id"])
+            await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
             await app.state.notifier.publish(
                 "delete_datapoint",
                 json.dumps(
