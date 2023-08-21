@@ -1,0 +1,2 @@
+filip~=0.2.5
+pydantic~=1.10.7
