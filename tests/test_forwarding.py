@@ -153,6 +153,7 @@ class TestForwarding(TestInit):
             topic=datapoint_duplicated_1.topic,
             payload=json.dumps(duplicated_payload)
         )
+        time.sleep(1)
 
         # both attribute should receive data
         res1 = self.cbc.get_attribute_value(
