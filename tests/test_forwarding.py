@@ -185,10 +185,3 @@ class TestForwarding(TestInit):
         )
         # compare
         self.assertEqual(res3, self.value_3)
-
-        # TODO send data to unmatched datapoint via mqtt
-        # TODO query datapoint from CB
-
-        # TODO send data to unregistered datapoint via mqtt
-        # TODO query datapoint from CB
-
