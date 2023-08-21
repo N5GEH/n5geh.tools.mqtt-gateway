@@ -15,7 +15,6 @@ class TestCRUD(TestInit):
         pass
 
     def test_create(self):
-        # TODO the object ID will be created by gateway
         headers = {
             'Accept': 'application/json'
         }
@@ -24,7 +23,7 @@ class TestCRUD(TestInit):
         datapoint1 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$../data1"
+                "jsonpath": "$..data1"
             }
         )
         response1 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
@@ -36,7 +35,7 @@ class TestCRUD(TestInit):
         datapoint2 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$../data2",
+                "jsonpath": "$..data2",
                 "matchDatapoint": True,
                 "entity_id": "EntityID",
                 "entity_type": "EntityType",
@@ -52,7 +51,7 @@ class TestCRUD(TestInit):
         datapoint3 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$../data3",
+                "jsonpath": "$..data3",
                 "matchDatapoint": True
             }
         )
@@ -64,7 +63,7 @@ class TestCRUD(TestInit):
         datapoint4 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$../data4",
+                "jsonpath": "$..data4",
                 "matchDatapoint": False,
                 "entity_id": "EntityID",
                 "entity_type": "EntityType",
@@ -83,7 +82,7 @@ class TestCRUD(TestInit):
         datapoint5 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$../dat5"
+                "jsonpath": "$..dat5"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
@@ -99,8 +98,33 @@ class TestCRUD(TestInit):
         )
 
     def test_duplicated(self):
-        # TODO
-        pass
+        """
+        Test duplicated data points. Duplicated data points are the points
+        that have the same `topic` and `jsonpath`.
+
+        Right now the gateway will accept duplicated data points, because
+        it reflects a use case that one single data point can be matched
+        to different attributes.
+        """
+        headers = {
+            'Accept': 'application/json'
+        }
+
+        # create data point 6
+        datapoint6 = Datapoint(
+            **{
+                "topic": "topic/of/crud",
+                "jsonpath": "$..dat6"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers, data=datapoint6.json())
+        object_id_6 = response.json()["object_id"]
+
+        # create duplicated dp with data dp 6
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers, data=datapoint6.json())
+        self.assertTrue(response.ok)
 
     def test_update(self):
         headers = {
