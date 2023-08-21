@@ -41,18 +41,12 @@ class Datapoint(BaseModel):
     description: Optional[str] = ""
     matchDatapoint: Optional[bool] = False
 
-    class Config:
-        extra = Extra.forbid
-
 
 class DatapointUpdate(BaseModel):
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
-
-    class Config:
-        extra = Extra.forbid
 
 
 @app.on_event("startup")
