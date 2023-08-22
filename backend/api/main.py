@@ -2,7 +2,6 @@ import json
 import os
 from typing import List, Optional
 from uuid import uuid4
-
 import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
@@ -189,9 +188,8 @@ async def add_datapoint(
             # check if there is already a device subscribed to the same topic
             # if so, the gateway will not subscribe to the topic again
             subscribed = await conn.fetchrow(
-                """SELECT object_id FROM datapoints WHERE topic=$1 AND object_id!=$2""",
-                datapoint.topic,
-                datapoint.object_id,
+                """SELECT object_id FROM datapoints WHERE topic=$1""",
+                datapoint.topic
             )
             await conn.execute(
                 """INSERT INTO datapoints (object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description) 
@@ -338,7 +336,12 @@ async def delete_datapoint(
         await app.state.redis.hdel(datapoint["topic"], object_id)
 
         if not unsubscribe:
-            await app.state.notifier.publish("unsubscribe", datapoint["topic"])
+            # await app.state.notifier.publish("unsubscribe", datapoint["topic"])
+            stream_name = "manage_topics"
+            await app.state.notifier.xadd(
+                    stream_name,
+                    {'unsubscribe': datapoint["topic"]},
+                )
         return None
     except Exception as e:
         print(e)
@@ -364,25 +367,16 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
     try:
         async with conn.transaction():
             datapoints = await conn.fetch(
-                """SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name FROM datapoints"""
+                """SELECT object_id, jsonpath, topic FROM datapoints"""
             )
-            await conn.execute("""DELETE FROM datapoints""")
+        # notify gateway to unsubscribe all topics
+        stream_name = "manage_topics"
+        await app.state.notifier.xadd(
+            stream_name,
+            {'unsubscribe_all': 'all'},
+        )
         for datapoint in datapoints:
             await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
-            await app.state.notifier.publish(
-                "delete_datapoint",
-                json.dumps(
-                    {
-                        "object_id": datapoint["object_id"],
-                        "jsonpath": datapoint["jsonpath"],
-                        "topic": datapoint["topic"],
-                        "entity_id": datapoint["entity_id"],
-                        "entity_type": datapoint["entity_type"],
-                        "attribute_name": datapoint["attribute_name"],
-                        "unsubscribe": True,
-                    }
-                ),
-            )
         return None
     except Exception as e:
         print(e)

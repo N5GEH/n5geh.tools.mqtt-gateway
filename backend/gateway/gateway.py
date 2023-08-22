@@ -109,6 +109,13 @@ class MqttGateway(Client):
             elif command == "unsubscribe":
                 await client.unsubscribe(topic)
                 self.logger.info(f"Unsubscribed from {topic}")
+            elif command == "unsubscribe_all":
+                datapoints = await self.conn.fetch("SELECT topic FROM datapoints")
+                topics = list(set([datapoint["topic"] for datapoint in datapoints]))
+                for topic in topics:
+                    await client.unsubscribe(topic)
+                    self.logger.info(f"Unsubscribed from {topic}")
+                await self.conn.execute("""DELETE FROM datapoints""")
             else:
                 self.logger.error(f"Unknown command: {command}")
         except Exception as e:
