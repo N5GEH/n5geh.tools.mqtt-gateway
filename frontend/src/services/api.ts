@@ -1,5 +1,6 @@
 // contain all the api calls to the backend
-let API_HOST = process.env.API_HOST || 'http://localhost:8000';
+// let API_HOST = process.env.API_HOST || 'http://localhost:8000';
+const API_HOST: string = process.env.API_HOST || "http://api:8000";
 
 export interface Datapoint {
     object_id?: string;
