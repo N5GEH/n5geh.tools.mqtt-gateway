@@ -45,7 +45,7 @@ The recommended way to deploy the MQTT gateway is to use the pre-built docker im
 ````commandline
 cd n5geh.tools.mqtt-gateway/
 export CR_PAT=YOUR_TOKEN
-echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+echo $CR_PAT | docker login ghcr.io -u YOUR_USERNAME --password-stdin
 ````
 `YOUR_TOKEN` (classic [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)) and `USERNAME` must be replaced with yours. Check [here](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) for more information.
 
