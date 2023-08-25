@@ -22,9 +22,6 @@ jobs:
           - dockerfile: ./backend/gateway/Dockerfile
             image: gateway
             context: ./backend/gateway
-          - dockerfile: ./frontend/Dockerfile
-            image: frontend
-            context: ./frontend
           - dockerfile: ./backend/api/Dockerfile
             image: api
             context: ./backend/api

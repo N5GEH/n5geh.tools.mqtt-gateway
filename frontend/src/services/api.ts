@@ -1,6 +1,5 @@
 // contain all the api calls to the backend
-// let API_HOST = process.env.API_HOST || 'http://localhost:8000';
-const API_HOST: string = process.env.API_HOST || "http://api:8000";
+let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export interface Datapoint {
     object_id?: string;
@@ -30,7 +29,7 @@ export interface SystemStatus {
 
 
 export const fetchData = async (): Promise<Datapoint[]> => {
-    const response: Response = await fetch(`${API_HOST}/data`);
+    const response: Response = await fetch(`${API_URL}/data`);
     const responseData = await response.json();
     let data: Datapoint[] = await Promise.all(responseData.map(async row => {
         row.status = await getStatus(row.object_id);
@@ -40,7 +39,7 @@ export const fetchData = async (): Promise<Datapoint[]> => {
 };
 
 export const addData = async (data: Datapoint) => {
-    const response: Response = await fetch(`${API_HOST}/data`, {
+    const response: Response = await fetch(`${API_URL}/data`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -52,7 +51,7 @@ export const addData = async (data: Datapoint) => {
 }
 
 export const updateData = async (data: DatapointUpdate) => {
-    const response: Response = await fetch(`${API_HOST}/data/${data.object_id}`, {
+    const response: Response = await fetch(`${API_URL}/data/${data.object_id}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json'
@@ -67,7 +66,7 @@ export const updateData = async (data: DatapointUpdate) => {
 }
 
 export const deleteData = async (object_id: string): Promise<Datapoint | null> => {
-    const response: Response = await fetch(`${API_HOST}/data/${object_id}`, {
+    const response: Response = await fetch(`${API_URL}/data/${object_id}`, {
         method: 'DELETE',
     });
     // the server returns a 204 No Content response if the delete was successful
@@ -81,7 +80,7 @@ export const deleteData = async (object_id: string): Promise<Datapoint | null> =
 }
 
 export const getStatus = async (object_id: string): Promise<string | boolean | null> => {
-    const response: Response = await fetch(`${API_HOST}/data/${object_id}/status`);
+    const response: Response = await fetch(`${API_URL}/data/${object_id}/status`);
     if (!response.ok) {
         throw new Error(`Failed to get status for datapoint with object_id ${object_id}`);
     }
@@ -90,7 +89,7 @@ export const getStatus = async (object_id: string): Promise<string | boolean | n
 }
 
 export const getSystemStatus = async (): Promise<SystemStatus> => {
-    const response: Response = await fetch(`${API_HOST}/system/status`);
+    const response: Response = await fetch(`${API_URL}/system/status`);
     if (!response.ok) {
         throw new Error(`Failed to get system status`);
     }
