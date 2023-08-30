@@ -1,9 +1,7 @@
 version: '3.8'
 services:
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/n5geh/n5geh.tools.mqtt-gateway/frontend:main
     container_name: mqtt_gateway_frontend
     env_file:
       - .env
