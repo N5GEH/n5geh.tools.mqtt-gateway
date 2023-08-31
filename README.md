@@ -34,11 +34,9 @@ This can be created from the provided `env.EXAMPLE`.
 The default values can be directly used for the test deployment.
 Check [here](https://github.com/N5GEH/n5geh.tools.mqtt-gateway#environment-variables) for more information about the environment variables. 
 
-There are two methods to deploy the gateway: 1) pull images from GitHub Container Registry, or 2) building your local images.
-
-**Important**: The frontend can currently only be built locally, because of the limitation of the used framework.
-Therefore, `VITE_API_URL` has to be set up in `./frontend/.env` as shown in `./frontend/.env.example`.
-`VITE_API_URL` refers to the URL to access the Gateway api from the client side (i.e., your browser)
+There are two methods to deploy the gateway:
+- [Pull images from GitHub Container Registry](https://github.com/N5GEH/n5geh.tools.mqtt-gateway#pull-docker-images)
+- [Building your local images](https://github.com/N5GEH/n5geh.tools.mqtt-gateway#build-your-own-docker-images).
 
 #### Pull docker images
 The recommended way to deploy the MQTT gateway is to use the pre-built docker images. Under the packages of this repository, you can find the images for the `gateway`, `frontend`, and `API`. In oder to pull these images, you need to first sign in to the `ghcr.io` (GitHub Container Registry).
@@ -81,7 +79,7 @@ The gateway can be configured with the following environment variables:
 - `REDIS_URL` - the URL of the Redis database (used for caching)
 - `FIWARE_SERVICE` - the FIWARE service name
 - `FIWARE_SERVICEPATH` - the FIWARE service path
-- `API_KEY` - the API key for the gateway
+- `VITE_API_URL` - the URL to access the Gateway API from the client side (i.e., from your browser)
 
 ## Preview
 ### Web UI
