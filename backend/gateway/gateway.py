@@ -23,7 +23,6 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 orion = os.environ.get("ORION_URL", "http://localhost:1026")
 service = os.environ.get("FIWARE_SERVICE", "gateway")
 service_path = os.environ.get("FIWARE_SERVICEPATH", "/gateway")
-api_key = os.environ.get("API_KEY", "plugnplay")
 
 host = os.environ.get("POSTGRES_HOST", "localhost")
 user = os.environ.get("POSTGRES_USER", "karelia")
