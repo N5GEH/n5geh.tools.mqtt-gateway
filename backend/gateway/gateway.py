@@ -59,17 +59,16 @@ class MqttGateway(Client):
         self.logger = Logger.with_default_handlers(name="mqtt-gateway")
         self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
 
-    async def mqtt_worker(self, client: Client) -> None:
+    async def mqtt_worker(self) -> None:
         async with aiohttp.ClientSession() as worker_session:
-            async with Client(MQTT_HOST, keepalive=60000) as worker_client:
-                while True:
-                    try:
-                        topic, payload = await self.mqtt_queue.get()
-                        await self.process_mqtt_message(topic, payload, worker_client, worker_session)
-                        self.mqtt_queue.task_done()
-                    except Exception as e:
-                        self.logger.error(e)
-                        continue
+            while True:
+                try:
+                    topic, payload = await self.mqtt_queue.get()
+                    await self.process_mqtt_message(topic, payload, worker_session)
+                    self.mqtt_queue.task_done()
+                except Exception as e:
+                    self.logger.error(e)
+                    continue
 
     async def redis_worker(self, client: Client) -> None:
         while True:
@@ -82,7 +81,7 @@ class MqttGateway(Client):
                 continue
 
     async def start_workers(self, client: Client) -> None:
-        mqtt_workers = [asyncio.create_task(self.mqtt_worker(client)) for _ in range(12)]
+        mqtt_workers = [asyncio.create_task(self.mqtt_worker()) for _ in range(12)]
         redis_workers = [asyncio.create_task(self.redis_worker(client)) for _ in range(4)]
         await asyncio.gather(*(mqtt_workers + redis_workers))
 
@@ -124,7 +123,7 @@ class MqttGateway(Client):
             self.logger.info(f"Done processing command: {command} {topic}")
 
     async def process_mqtt_message(
-        self, topic: str, message: str, client: Client, session: aiohttp.ClientSession
+        self, topic: str, message: str, session: aiohttp.ClientSession
     ) -> None:
         """
         Processes a single MQTT message.
@@ -204,14 +203,11 @@ class MqttGateway(Client):
                     ((str(message.topic), message.payload))
                 )
 
-    async def redis_listener(self, client: Client) -> None:
+    async def redis_listener(self) -> None:
         """
         Listens to Redis for new messages on subscribed channels. When a message is received, the on_redis_message callback function is called.
         Also subscribes to all channels in the database on startup.
         The callback function is called asynchronously, which means that the listener can continue to listen for new messages while the callback function is being executed.
-
-        Args:
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
         stream_name = "manage_topics"
         group_name = "manage_topics_group"
@@ -290,7 +286,7 @@ class MqttGateway(Client):
                         # mqtt listener put the coming mqtt messages to mqtt_queue
                         asyncio.create_task(self.mqtt_listener(client)),
                         # redis listener put the coming API command to redis_queue (or API queue)
-                        asyncio.create_task(self.redis_listener(client)),
+                        asyncio.create_task(self.redis_listener()),
                         # workers have two types, mqtt_workers and redis_workers
                         #  mqtt_worker get message from mqtt queue and forward to FIWARE
                         #  redis_workers get the command from redis queue and complete certain job
