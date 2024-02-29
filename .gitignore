@@ -356,3 +356,4 @@ package
 .vscode
 archive
 /.idea
+/local_test/

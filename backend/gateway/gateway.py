@@ -93,7 +93,8 @@ class MqttGateway(Client):
         Processes a single Redis message.
 
         Args:
-            message (Tuple[str, str, Client]): A tuple containing the command, the topic, and the MQTT client used by the gateway.
+            message (Tuple[str, str, Client]): A tuple containing the command, the topic,
+            and the MQTT client used by the gateway.
         """
         decoded_data = {k.decode(): v.decode() for k, v in message.items()}
 
@@ -282,10 +283,17 @@ class MqttGateway(Client):
         while True:
             reconnect_interval = 5
             try:
+                # Client connects to the broker when enter the "with" statement and
+                # disconnects when we exit it
                 async with Client(hostname=MQTT_HOST) as client:
                     tasks = [
+                        # mqtt listener put the coming mqtt messages to mqtt_queue
                         asyncio.create_task(self.mqtt_listener(client)),
+                        # redis listener put the coming API command to redis_queue (or API queue)
                         asyncio.create_task(self.redis_listener(client)),
+                        # workers have two types, mqtt_workers and redis_workers
+                        #  mqtt_worker get message from mqtt queue and forward to FIWARE
+                        #  redis_workers get the command from redis queue and complete certain job
                         asyncio.create_task(self.start_workers(client)),
                     ]
                     await asyncio.gather(*tasks)
