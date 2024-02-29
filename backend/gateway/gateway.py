@@ -5,6 +5,7 @@ This module implements the MQTT IoT Gateway.
 import asyncio
 import json
 import os
+import ssl
 from typing import List, Tuple
 
 import aiohttp
@@ -19,6 +20,14 @@ from uuid import uuid4
 
 # Load configuration from JSON file
 MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
+MQTT_PORT = os.environ.get("MQTT_HOST", 1883)
+MQTT_USER = os.environ.get("MQTT_USER", None)
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", None)
+MQTT_TLS = os.environ.get("MQTT_TLS", False)
+if MQTT_TLS:
+    tls_context = ssl.create_default_context()
+else:
+    tls_context = None
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 orion = os.environ.get("ORION_URL", "http://localhost:1026")
 service = os.environ.get("FIWARE_SERVICE", "gateway")
@@ -270,8 +279,10 @@ class MqttGateway(Client):
 
     async def run(self):
         """
-        Starts the gateway and runs the main loop. Simultaneously listens to PostgreSQL for new topics to subscribe or unsubscribe to.
-        In case of a connection error, the gateway will try to reconnect after 5 seconds and will continue to do so until a connection is established.
+        Starts the gateway and runs the main loop. Simultaneously listens to PostgreSQL
+        for new topics to subscribe or unsubscribe to. In case of a connection error,
+        the gateway will try to reconnect after 5 seconds and will continue to do so
+        until a connection is established.
         """
         await self.cache.flushdb()
         self.conn = await asyncpg.connect(DATABASE_URL)
@@ -281,7 +292,13 @@ class MqttGateway(Client):
             try:
                 # Client connects to the broker when enter the "with" statement and
                 # disconnects when we exit it
-                async with Client(hostname=MQTT_HOST) as client:
+                async with Client(
+                        hostname=MQTT_HOST,
+                        port=MQTT_PORT,
+                        username=MQTT_USER,
+                        password=MQTT_PASSWORD,
+                        tls_context=tls_context
+                ) as client:  # only where the mqtt client is connected
                     tasks = [
                         # mqtt listener put the coming mqtt messages to mqtt_queue
                         asyncio.create_task(self.mqtt_listener(client)),
