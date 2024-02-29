@@ -64,6 +64,32 @@ class TestForwarding(TestInit):
                 "data2": self.value_unmatch
         }
 
+        self.value_arm = True
+        attr_arm = {'attr1':
+                        {'value': int(self.value_arm)-1,
+                         'type': 'Number'}
+                    }
+        self.arm_entity = ContextEntity(
+            id="Test:arm",
+            type="Test",
+            **attr_arm
+        )
+        self.cbc.post_entity(entity=self.arm_entity)
+        time.sleep(1)
+
+        self.matched_datapoint_arm = Datapoint(
+            **{
+                "topic": "v3/airroommonitoring@ttn/devices/eui-00xxxxxxxxxxxxxxxf/up",
+                "jsonpath": "$.uplink_message.decoded_payload.bytes.channelA.value",
+                "matchDatapoint": True,
+                "entity_id": self.arm_entity.id,
+                "entity_type": self.arm_entity.type,
+                "attribute_name": self.arm_entity.get_attribute_names().pop()
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
+                                    data=self.matched_datapoint_arm.json())
+
     def test_plain_payload(self):
         # plain payload
         # send data to registered and matched datapoint via mqtt
@@ -169,6 +195,142 @@ class TestForwarding(TestInit):
             attr_name=datapoint_duplicated_2.attribute_name
         )
         self.assertEqual(res2, value)
+
+    def test_arm_forwarding(self):
+        payload = {
+                    "end_device_ids": {
+                        "device_id": "eui-00xxxxxxxxxxxxxxxf",
+                        "application_ids": {
+                            "application_id": "airroommonitoring"
+                        },
+                        "dev_eui": "00xxxxxxxxxxxxxxxF",
+                        "join_eui": "0018B24452494331",
+                        "dev_addr": "260B10AA"
+                    },
+                    "correlation_ids": [
+                        "gs:uplink:01HQQQ247V0RAVH1MXA98Z301K"
+                    ],
+                    "received_at": "2024-02-28T11:19:41.260320763Z",
+                    "uplink_message": {
+                        "session_key_id": "AY1a+0y8iqaXm1/oeZfIvg==",
+                        "f_port": 1,
+                        "f_cnt": 41,
+                        "frm_payload": "QCAAAQABAAEAACY=",
+                        "decoded_payload": {
+                            "bytes": {
+                                "channelA": {
+                                    "currentState": False,
+                                    "previousFrameState": True,
+                                    "value": self.value_arm
+                                },
+                                "decodingInfo": "true: ON/CLOSED, false: OFF/OPEN",
+                                "type": "0x40 Dry Contacts data"
+                            }
+                        },
+                        "rx_metadata": [
+                            {
+                                "gateway_ids": {
+                                    "gateway_id": "eui-7276ff0039040013",
+                                    "eui": "7276FF0039040013"
+                                },
+                                "time": "2023-04-25T08:43:29.036038Z",
+                                "timestamp": 3359704092,
+                                "rssi": -41,
+                                "channel_rssi": -41,
+                                "snr": 8.2,
+                                "location": {
+                                    "latitude": 50.79013458818246,
+                                    "longitude": 6.051640212535858,
+                                    "altitude": 150,
+                                    "source": "SOURCE_REGISTRY"
+                                },
+                                "uplink_token": "CiIKIAoUZXVpLTcyNzZmZjAwMzkwNDAwMTMSCHJ2/wA5BAATEJyIhMIMGgsIza38rgYQivzUGCDgmuDv47+yAQ==",
+                                "channel_index": 7,
+                                "received_at": "2024-02-28T11:19:38.771196836Z"
+                            },
+                            {
+                                "gateway_ids": {
+                                    "gateway_id": "aixnerd-bvd",
+                                    "eui": "3436323821002C00"
+                                },
+                                "time": "2024-02-28T11:16:13.034372Z",
+                                "timestamp": 361599515,
+                                "rssi": -114,
+                                "channel_rssi": -114,
+                                "snr": -7,
+                                "location": {
+                                    "latitude": 50.786662677133556,
+                                    "longitude": 6.080043926583554,
+                                    "altitude": 297,
+                                    "source": "SOURCE_REGISTRY"
+                                },
+                                "uplink_token": "ChkKFwoLYWl4bmVyZC1idmQSCDQ2MjghACwAEJuktqwBGgsIza38rgYQ88nIGyD48oqIw5dP",
+                                "channel_index": 2,
+                                "received_at": "2024-02-28T11:19:41.042920949Z"
+                            },
+                            {
+                                "gateway_ids": {
+                                    "gateway_id": "eui-58a0cbfffe804543",
+                                    "eui": "58A0CBFFFE804543"
+                                },
+                                "time": "2024-02-28T11:19:41.036648035Z",
+                                "timestamp": 1212161827,
+                                "rssi": -110,
+                                "channel_rssi": -110,
+                                "snr": -2.25,
+                                "location": {
+                                    "latitude": 50.789513831131764,
+                                    "longitude": 6.049510538578034,
+                                    "source": "SOURCE_REGISTRY"
+                                },
+                                "uplink_token": "CiIKIAoUZXVpLTU4YTBjYmZmZmU4MDQ1NDMSCFigy//+gEVDEKO+gMIEGgsIza38rgYQiOPgJCC4webTo5EG",
+                                "received_at": "2024-02-28T11:19:41.023389265Z"
+                            }
+                        ],
+                        "settings": {
+                            "data_rate": {
+                                "lora": {
+                                    "bandwidth": 125000,
+                                    "spreading_factor": 7,
+                                    "coding_rate": "4/5"
+                                }
+                            },
+                            "frequency": "868500000",
+                            "timestamp": 3359704092,
+                            "time": "2023-04-25T08:43:29.036038Z"
+                        },
+                        "received_at": "2024-02-28T11:19:41.052399023Z",
+                        "consumed_airtime": "0.061696s",
+                        "version_ids": {
+                            "brand_id": "adeunis",
+                            "model_id": "dry-contact",
+                            "hardware_version": "1.00",
+                            "firmware_version": "1.0",
+                            "band_id": "EU_863_870"
+                        },
+                        "network_ids": {
+                            "net_id": "000013",
+                            "ns_id": "EC656E0000000181",
+                            "tenant_id": "ttn",
+                            "cluster_id": "eu1",
+                            "cluster_address": "eu1.cloud.thethings.network"
+                        }
+                    }
+                }
+        topic = self.matched_datapoint_arm.topic
+
+        self.mqttc.publish(
+            topic=topic,
+            payload=json.dumps(payload)
+        )
+        time.sleep(1)
+        res = self.cbc.get_attribute_value(
+            entity_id=self.matched_datapoint_arm.entity_id,
+            entity_type=self.matched_datapoint_arm.entity_type,
+            attr_name=self.matched_datapoint_arm.attribute_name
+        )
+        # compare
+        self.assertEqual(res, self.value_arm)
 
     def test_explicit_jsonpath(self):
         # send data to registered and matched datapoint via mqtt
