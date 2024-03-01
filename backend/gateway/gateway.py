@@ -170,15 +170,12 @@ class MqttGateway(Client):
             )
             if value:
                 payload = {
-                    datapoint["attribute_name"]: {
-                        "type": "Number",
-                        "value": value,
-                    }
+                    datapoint["attribute_name"]: value
                 }
                 # Send the payload to the Orion Context Broker
                 try:
                     await session.patch(
-                        url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}",
+                        url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
                         headers={
                             "fiware-service": service,
