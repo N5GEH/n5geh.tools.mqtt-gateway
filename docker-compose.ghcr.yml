@@ -23,6 +23,8 @@ services:
 #      - ./backend/api:/app  # for hot reloading
     env_file:
       - .env
+    depends_on:
+      - postgres
     deploy:
       restart_policy:
         condition: on-failure
@@ -38,6 +40,8 @@ services:
 #      - ./backend/gateway:/app  # for hot reloading
     env_file:
       - .env
+    depends_on:
+      - postgres
     deploy:
       replicas: 1
       restart_policy:
