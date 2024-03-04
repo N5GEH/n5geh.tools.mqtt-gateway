@@ -4,7 +4,6 @@ This module implements the MQTT IoT Gateway.
 
 import asyncio
 import json
-import os
 import ssl
 from typing import List, Tuple
 
@@ -17,26 +16,27 @@ from asyncio_mqtt import Client, MqttError
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
+from settings import settings
 
 # Load configuration from JSON file
-MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
-MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
-MQTT_USER = os.environ.get("MQTT_USER", None)
-MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", None)
-MQTT_TLS = os.environ.get("MQTT_TLS", False)
+MQTT_HOST = settings.MQTT_HOST
+MQTT_PORT = settings.MQTT_PORT
+MQTT_USER = settings.MQTT_USER
+MQTT_PASSWORD = settings.MQTT_PASSWORD
+MQTT_TLS = settings.MQTT_TLS
 if MQTT_TLS:
     tls_context = ssl.create_default_context()
 else:
     tls_context = None
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
-orion = os.environ.get("ORION_URL", "http://localhost:1026")
-service = os.environ.get("FIWARE_SERVICE", "gateway")
-service_path = os.environ.get("FIWARE_SERVICEPATH", "/gateway")
+REDIS_URL = settings.REDIS_URL
+orion_url = settings.ORION_URL
+service = settings.FIWARE_SERVICE
+service_path = settings.FIWARE_SERVICEPATH
 
-host = os.environ.get("POSTGRES_HOST", "localhost")
-user = os.environ.get("POSTGRES_USER", "karelia")
-password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-database = os.environ.get("POSTGRES_DB", "iot_devices")
+host = settings.POSTGRES_HOST
+user = settings.POSTGRES_USER
+password = settings.POSTGRES_PASSWORD
+database = settings.POSTGRES_DB
 
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 
@@ -175,7 +175,7 @@ class MqttGateway(Client):
                 # Send the payload to the Orion Context Broker
                 try:
                     await session.patch(
-                        url=f"{orion}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
+                        url=f"{orion_url}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
                         headers={
                             "fiware-service": service,

@@ -1,5 +1,4 @@
 import json
-import os
 from typing import List, Optional
 from uuid import uuid4
 import asyncpg
@@ -9,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, Extra
 from redis import asyncio as aioredis
 import aiohttp
+from settings import settings
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -20,13 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-host = os.environ.get("POSTGRES_HOST", "localhost")
-user = os.environ.get("POSTGRES_USER", "admin")
-password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-database = os.environ.get("POSTGRES_DB", "iot_devices")
+host = settings.POSTGRES_HOST
+user = settings.POSTGRES_USER
+password = settings.POSTGRES_PASSWORD
+database = settings.POSTGRES_DB
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
-ORION_URL = os.environ.get("ORION_URL", "http://localhost:1026")
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+ORION_URL = settings.ORION_URL
+REDIS_URL = settings.REDIS_URL
 
 
 # Pydantic model

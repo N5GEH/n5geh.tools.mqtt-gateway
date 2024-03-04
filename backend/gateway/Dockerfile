@@ -9,13 +9,16 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Copy requirements.txt
-COPY requirements.txt ./
+COPY ./backend/gateway/requirements.txt ./
+
+# Copy settings.py
+COPY settings.py ./
 
 # Install dependencies
 RUN pip install -r requirements.txt
 
 # Copy source code
-COPY . ./
+COPY ./backend/gateway/. ./
 
 # Run the gateway
 CMD ["python", "gateway.py"]
