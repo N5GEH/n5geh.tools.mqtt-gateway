@@ -24,10 +24,10 @@ jobs:
             context: ./frontend
           - dockerfile: ./backend/gateway/Dockerfile
             image: gateway
-            context: ./backend/gateway
+            context: ./
           - dockerfile: ./backend/api/Dockerfile
             image: api
-            context: ./backend/api
+            context: ./
     permissions:
       contents: read
       packages: write
