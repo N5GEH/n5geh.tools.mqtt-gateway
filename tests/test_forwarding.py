@@ -124,6 +124,10 @@ class TestForwarding(TestInit):
         self.assertEqual(res2, self.value_2)
 
     def test_duplicated_datapoint(self):
+        """
+        Test the functionality to allow one single mqtt data point to be forwarded
+        to multiple FIWARE attributes.
+        """
         headers = {
             'Accept': 'application/json'
         }
