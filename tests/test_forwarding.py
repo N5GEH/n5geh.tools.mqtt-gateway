@@ -347,3 +347,59 @@ class TestForwarding(TestInit):
         )
         # compare
         self.assertEqual(res3, self.value_3)
+
+    def test_zero_datapoint(self):
+        value_new = round(random.random(), 4)
+        self.mqttc.publish(
+            topic=self.matched_datapoint.topic,
+            payload=json.dumps({"data1": value_new})
+        )
+        time.sleep(1)
+        # query data from CB
+        res1 = self.cbc.get_attribute_value(
+            entity_id=self.matched_datapoint.entity_id,
+            entity_type=self.matched_datapoint.entity_type,
+            attr_name=self.matched_datapoint.attribute_name
+        )
+        # compare
+        self.assertEqual(res1, value_new)
+
+        zero_like_values = [0, False, "0"]
+        for zero_value in zero_like_values:
+            self.mqttc.publish(
+                topic=self.matched_datapoint.topic,
+                payload=json.dumps({"data1": zero_value})
+            )
+            time.sleep(1)
+            # query data from CB
+            res1 = self.cbc.get_attribute_value(
+                entity_id=self.matched_datapoint.entity_id,
+                entity_type=self.matched_datapoint.entity_type,
+                attr_name=self.matched_datapoint.attribute_name
+            )
+            # compare
+            self.assertEqual(res1, zero_value)
+
+    def test_removed_datapoints(self):
+        """
+        Test whether data point will still be forwarded after being deleted
+        """
+        value_new = round(random.random(), 4)
+        self.payload_dict1["data1"] = value_new
+
+        object_id = self.matched_object_id
+        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id)
+
+        self.mqttc.publish(
+            topic=self.matched_datapoint.topic,
+            payload=json.dumps(self.payload_dict1)
+        )
+        time.sleep(1)
+        # query data from CB
+        res1 = self.cbc.get_attribute_value(
+            entity_id=self.matched_datapoint.entity_id,
+            entity_type=self.matched_datapoint.entity_type,
+            attr_name=self.matched_datapoint.attribute_name
+        )
+        # compare
+        self.assertNotEqual(res1, value_new)

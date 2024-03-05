@@ -163,12 +163,11 @@ class MqttGateway(Client):
         for datapoint in datapoints.values():
             datapoint = json.loads(datapoint.decode("utf-8"))
             # Get the value from the payload using jsonpath
-            value = (
-                parse(datapoint["jsonpath"])
-                .find(json.loads(message.decode("utf-8")))[0]
-                .value
+            parsed_result = parse(datapoint["jsonpath"]).find(
+                json.loads(message.decode("utf-8"))
             )
-            if value:
+            if len(parsed_result) > 0:
+                value = parsed_result[0].value
                 payload = {
                     datapoint["attribute_name"]: value
                 }
@@ -177,6 +176,7 @@ class MqttGateway(Client):
                     await session.patch(
                         url=f"{orion_url}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
+                        # TODO support other headers
                         headers={
                             "fiware-service": service,
                             "fiware-servicepath": service_path,
@@ -186,6 +186,9 @@ class MqttGateway(Client):
                 except Exception as e:
                     await self.logger.error(e)
                     continue
+            else:
+                await self.logger.warning(
+                    f"Can not locate {datapoint['jsonpath']} for topic {topic}")
 
     async def mqtt_listener(self, client: Client) -> None:
         """
@@ -205,6 +208,7 @@ class MqttGateway(Client):
             print(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
+                print(f"Receive data {message.payload} from topic {message.topic}")
                 self.mqtt_queue.put_nowait(
                     ((str(message.topic), message.payload))
                 )
