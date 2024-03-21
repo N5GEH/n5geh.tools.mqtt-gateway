@@ -471,4 +471,5 @@ async def check_redis():
         return False
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
+                log_level=settings.LOG_LEVEL.lower())

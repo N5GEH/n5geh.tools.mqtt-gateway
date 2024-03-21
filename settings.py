@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     FIWARE_SERVICE: str = "gateway_test"
     FIWARE_SERVICEPATH: str = "/"
     # Get log level from environment variable, default to INFO if not set
-    LOG_LEVEL: str = 'INFO'
+    LOG_LEVEL: str = 'INFO'  # 'critical', 'error', 'warning', 'info', 'debug'
 
     class Config:
         env_file = ".env"
