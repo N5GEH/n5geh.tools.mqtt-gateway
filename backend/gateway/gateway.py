@@ -17,6 +17,7 @@ from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
 from settings import settings
+import logging
 
 # Load configuration from JSON file
 MQTT_HOST = settings.MQTT_HOST
@@ -37,8 +38,11 @@ host = settings.POSTGRES_HOST
 user = settings.POSTGRES_USER
 password = settings.POSTGRES_PASSWORD
 database = settings.POSTGRES_DB
-
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
+
+# Configure logging
+logging.basicConfig(level=settings.LOG_LEVEL.upper(),
+                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 
 class MqttGateway(Client):
@@ -65,8 +69,6 @@ class MqttGateway(Client):
             url=f"{REDIS_URL}/1"
         )  # Redis Stream for notifying the API about new datapoints
         self.conn = None  # Initialized in run()
-        self.logger = Logger.with_default_handlers(name="mqtt-gateway")
-        self.logger.add_handler(AsyncFileHandler("mqtt-gateway.log"))
 
     async def mqtt_worker(self) -> None:
         async with aiohttp.ClientSession() as worker_session:
@@ -76,7 +78,7 @@ class MqttGateway(Client):
                     await self.process_mqtt_message(topic, payload, worker_session)
                     self.mqtt_queue.task_done()
                 except Exception as e:
-                    self.logger.error(e)
+                    logging.error(e)
                     continue
 
     async def redis_worker(self, client: Client) -> None:
@@ -86,7 +88,7 @@ class MqttGateway(Client):
                 await self.process_redis_message(data, client=client)
                 self.redis_queue.task_done()
             except Exception as e:
-                self.logger.error(e)
+                logging.error(e)
                 continue
 
     async def start_workers(self, client: Client) -> None:
@@ -110,26 +112,26 @@ class MqttGateway(Client):
         topic = list(decoded_data.values())[0]
 
         try:
-            print(f"Processing command: {command} {topic}")
+            logging.info(f"Processing command: {command} {topic}")
             if command == "subscribe":
                 await client.subscribe(topic)
-                self.logger.info(f"Subscribed to {topic}")
+                logging.info(f"Subscribed to {topic}")
             elif command == "unsubscribe":
                 await client.unsubscribe(topic)
-                self.logger.info(f"Unsubscribed from {topic}")
+                logging.info(f"Unsubscribed from {topic}")
             elif command == "unsubscribe_all":
                 datapoints = await self.conn.fetch("SELECT topic FROM datapoints")
                 topics = list(set([datapoint["topic"] for datapoint in datapoints]))
                 for topic in topics:
                     await client.unsubscribe(topic)
-                    self.logger.info(f"Unsubscribed from {topic}")
+                    logging.info(f"Unsubscribed from {topic}")
                 await self.conn.execute("""DELETE FROM datapoints""")
             else:
-                self.logger.error(f"Unknown command: {command}")
+                logging.error(f"Unknown command: {command}")
         except Exception as e:
-            self.logger.error(e)
+            logging.error(e)
         finally:
-            self.logger.info(f"Done processing command: {command} {topic}")
+            logging.info(f"Done processing command: {command} {topic}")
 
     async def process_mqtt_message(
         self, topic: str, message: str, session: aiohttp.ClientSession
@@ -143,16 +145,16 @@ class MqttGateway(Client):
         # Get all datapoints for the topic from the cache
         # If the topic is not in the cache, ask Postgres
         if not await self.cache.hlen(topic):
-            await self.logger.info(
+            logging.info(
                 f"No datapoints found for topic {topic} in cache, asking Postgres..."
             )
             datapoints = await self.get_datapoints_by_topic(topic)
             if not datapoints:
-                await self.logger.info(
+                logging.info(
                     f"No datapoints found for topic {topic} in Postgres"
                 )
                 return
-            await self.logger.info(f"Got {len(datapoints)} datapoints from Postgres")
+            logging.info(f"Got {len(datapoints)} datapoints from Postgres")
             # Add the datapoints to the cache
             for datapoint in datapoints:
                 await self.cache.hset(
@@ -182,12 +184,12 @@ class MqttGateway(Client):
                             "fiware-servicepath": service_path,
                         },
                     )
-                    await self.logger.info(f"Sent {payload} to Orion Context Broker")
+                    logging.info(f"Sent {payload} to Orion Context Broker")
                 except Exception as e:
-                    await self.logger.error(e)
+                    logging.error(e)
                     continue
             else:
-                await self.logger.warning(
+                logging.warning(
                     f"Can not locate {datapoint['jsonpath']} for topic {topic}")
 
     async def mqtt_listener(self, client: Client) -> None:
@@ -200,15 +202,15 @@ class MqttGateway(Client):
         Args:
             client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
         """
-        print("Listening to MQTT...")
+        logging.info("Listening to MQTT...")
         topics = await self.get_unique_topics()
-        print(f"Subscribing to {len(topics)} topics... ({topics})")
+        logging.info(f"Subscribing to {len(topics)} topics... ({topics})")
         for topic in topics:
             await client.subscribe(topic)
-            print(f"Subscribed to topic {topic}")
+            logging.info(f"Subscribed to topic {topic}")
         async with client.messages() as messages:
             async for message in messages:
-                print(f"Receive data {message.payload} from topic {message.topic}")
+                logging.info(f"Receive data {message.payload} from topic {message.topic}")
                 self.mqtt_queue.put_nowait(
                     ((str(message.topic), message.payload))
                 )
@@ -226,10 +228,10 @@ class MqttGateway(Client):
         try:
             await self.notifier.xgroup_create(stream_name, group_name, mkstream=True)
         except Exception as e:
-            print(e)
+            logging.error(e)
             pass
 
-        print(f"Listening to Stream {stream_name}...")
+        logging.info(f"Listening to Stream {stream_name}...")
         while True:
             try:
                 async with async_timeout.timeout(1):
@@ -242,8 +244,8 @@ class MqttGateway(Client):
                     for message in messages:
                         stream, payload = message
                         message_id, data = payload[0]
-                        print(f"Received message {message_id}")
-                        print(f"Received data {data}")
+                        logging.info(f"Received message {message_id}")
+                        logging.info(f"Received data {data}")
                         self.redis_queue.put_nowait(data)
                         await self.notifier.xack(stream_name, group_name, message_id.decode("utf-8"))
             except asyncio.TimeoutError:
@@ -312,7 +314,7 @@ class MqttGateway(Client):
                     ]
                     await asyncio.gather(*tasks)
             except MqttError as error:
-                print(
+                logging.error(
                     f"MQTT error: {error} - reconnecting in {reconnect_interval} seconds"
                 )
                 await asyncio.sleep(reconnect_interval)

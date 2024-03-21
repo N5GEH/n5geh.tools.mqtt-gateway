@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     FIWARE_SERVICE: str = "gateway_test"
     FIWARE_SERVICEPATH: str = "/"
+    # Get log level from environment variable, default to INFO if not set
+    LOG_LEVEL: str = 'INFO'
 
     class Config:
         env_file = ".env"

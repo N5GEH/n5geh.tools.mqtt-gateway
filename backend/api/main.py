@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, Extra
 from redis import asyncio as aioredis
 import aiohttp
 from settings import settings
+import logging
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -27,7 +28,9 @@ database = settings.POSTGRES_DB
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 ORION_URL = settings.ORION_URL
 REDIS_URL = settings.REDIS_URL
-
+# Configure logging
+logging.basicConfig(level=settings.LOG_LEVEL.upper(),
+                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -239,7 +242,7 @@ async def add_datapoint(
         raise HTTPException(status_code=409, detail="Device already exists!")
 
     except Exception as e:
-        print(e)
+        logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
 
@@ -344,7 +347,7 @@ async def delete_datapoint(
                 )
         return None
     except Exception as e:
-        print(e)
+        logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
 
@@ -379,7 +382,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
             await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
         return None
     except Exception as e:
-        print(e)
+        logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
 
@@ -441,7 +444,7 @@ async def check_orion():
             response = await session.get(f"{ORION_URL}/version")
             return response.status == 200
     except Exception as e:
-        print(f"Error checking Orion: {e}")
+        logging.error(f"Error checking Orion: {e}")
         return False
 
 async def check_postgres():
@@ -453,7 +456,7 @@ async def check_postgres():
             await connection.execute("SELECT 1")
             return True
     except Exception as e:
-        print(f"Error checking PostgreSQL: {e}")
+        logging.error(f"Error checking PostgreSQL: {e}")
         return False
 
 async def check_redis():
@@ -464,7 +467,7 @@ async def check_redis():
         await app.state.redis.ping()
         return True
     except Exception as e:
-        print(f"Error checking Redis: {e}")
+        logging.error(f"Error checking Redis: {e}")
         return False
 
 if __name__ == "__main__":
