@@ -43,14 +43,6 @@ class Datapoint(BaseModel):
     description: Optional[str] = ""
     matchDatapoint: Optional[bool] = False
 
-
-class DatapointUpdate(BaseModel):
-    entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
-    entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
-    attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = ""
-
-
 @app.on_event("startup")
 async def startup():
     """
@@ -148,7 +140,6 @@ async def get_datapoint(
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
     return row
-
 
 @app.post(
     "/data",
@@ -248,13 +239,13 @@ async def add_datapoint(
 
 @app.put(
     "/data/{object_id}",
-    response_model=DatapointUpdate,
+    response_model=Datapoint,
     summary="Update a specific datapoint in the gateway",
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
     object_id: str,
-    datapoint: DatapointUpdate,
+    datapoint: Datapoint,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
@@ -262,41 +253,75 @@ async def update_datapoint(
 
     Args:
         object_id (str): The object_id of the datapoint to be updated.
-        datapoint (DatapointUpdate): The updated datapoint.
+        datapoint (Datapoint): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+        HTTPException: If the datapoint to be updated is not found, a 404 error will be raised.
+        Exception: If some other error occurs, a 500 error will be raised.
     """
-    async with conn.transaction():
-        await conn.execute(
-            """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
-            datapoint.entity_id,
-            datapoint.entity_type,
-            datapoint.attribute_name,
-            datapoint.description,
+    # Validate input data: Ensure that entity_id and attribute_name are provided if matchDatapoint is True
+    if datapoint.matchDatapoint and (not datapoint.entity_id or not datapoint.attribute_name):
+        raise HTTPException(
+            status_code=400,
+            detail="entity_id and attribute_name must be set if Match Datapoint is enabled!"
+        )
+
+    try:
+        # Start a transaction to ensure atomicity
+        async with conn.transaction():
+            # Fetch the existing datapoint from the database
+            existing_datapoint = await conn.fetchrow(
+                """SELECT * FROM datapoints WHERE object_id=$1""",
+                object_id
+            )
+            # Raise a 404 error if the datapoint does not exist
+            if not existing_datapoint:
+                raise HTTPException(status_code=404, detail="Datapoint not found!")
+
+            # Update the datapoint in the database
+            await conn.execute(
+                """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4, matchDatapoint=$5 WHERE object_id=$6""",
+                datapoint.entity_id,
+                datapoint.entity_type,
+                datapoint.attribute_name,
+                datapoint.description,
+                datapoint.matchDatapoint,
+                object_id,
+            )
+
+            # Extract jsonpath and topic from the existing datapoint
+            jsonpath, topic = existing_datapoint['jsonpath'], existing_datapoint['topic']
+
+        # Update the datapoint in Redis
+        await app.state.redis.hset(
+            topic,
             object_id,
+            json.dumps(
+                {
+                    "object_id": object_id,
+                    "jsonpath": jsonpath,
+                    "entity_id": datapoint.entity_id,
+                    "entity_type": datapoint.entity_type,
+                    "attribute_name": datapoint.attribute_name,
+                    "description": datapoint.description,
+                }
+            ),
         )
 
-        jsonpath, topic = await conn.fetchrow(
-            """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
-        )
-    await app.state.redis.hset(
-        topic,
-        object_id,
-        json.dumps(
-            {
-                "object_id": object_id,
-                "jsonpath": jsonpath,
-                "entity_id": datapoint.entity_id,
-                "entity_type": datapoint.entity_type,
-                "attribute_name": datapoint.attribute_name,
-                "description": datapoint.description,
-            }
-        ),
-    )
+        # Return the updated datapoint as a dictionary
+        return {**datapoint.dict()}
 
-    return {**datapoint.dict()}
+    # Log and re-raise HTTP exceptions
+    except HTTPException as e:
+        logging.error(f"HTTPException: {str(e)}")
+        raise e
+
+    # Log any other exceptions and raise a 500 Internal Server Error
+    except Exception as e:
+        logging.error(f"Error updating datapoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.delete(
