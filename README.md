@@ -1,7 +1,8 @@
 # MQTT Gateway
 
 ## Overview
-This is a universal MQTT gateway for the NGSI-V2 context broker. It can support any MQTT-based sensor data communication using JSON as the payload. It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte](https://svelte.dev/).
+This is a universal MQTT gateway for the NGSI-V2 Context Broker, e.g. FIWARE-Orion. It supports any MQTT-based data ingress, using JSON as payload format. Data points can be simply registed using jsonpath and MQTT-topic.
+It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte](https://svelte.dev/).
 
 
 ## Quickstart
