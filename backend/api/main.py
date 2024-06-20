@@ -440,10 +440,30 @@ async def get_status():
     system_status = {
         "overall_status": overall_status,
         "checks": checks,
-        "version_info": get_version_info()
     }
     return system_status
 
+@app.get("/system/version",
+         response_model=dict,
+         summary="Get the version of the system and the dependencies",
+         description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
+)
+async def get_version_info():
+    """
+    Return version information for the application and its dependencies.
+    """
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+    def get_dependency_version(package: str):
+        """
+        Get the version of a package.
+        """
+        return importlib.metadata.version(package)
+    version_results = [get_dependency_version(dep) for dep in dependencies]
+    version_info = {
+        "application_version": application_version,
+        "dependencies": dict(zip(dependencies, version_results))
+    }
+    return version_info
 
 async def check_orion():
     """
@@ -494,22 +514,6 @@ async def check_redis():
         return {"status": False, "latency": latency,
                 "latency_unit": "ms", "message": str(e)}
 
-def get_version_info():
-    """
-    Return version information for the application and its dependencies.
-    """
-    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
-    def get_dependency_version(package: str):
-        """
-        Get the version of a package.
-        """
-        return importlib.metadata.version(package)
-    version_results = [get_dependency_version(dep) for dep in dependencies]
-    version_info = {
-        "application_version": application_version,
-        "dependencies": dict(zip(dependencies, version_results))
-    }
-    return version_info
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
                 log_level=settings.LOG_LEVEL.lower())

@@ -1,3 +1,4 @@
+import importlib
 import unittest
 from filip.utils.cleanup import clear_context_broker
 from paho.mqtt.client import Client, MQTTv5
@@ -79,6 +80,28 @@ class TestInit(unittest.TestCase):
         response = requests.request("GET", settings.GATEWAY_URL+"/data")
         if not response.ok:
             response.raise_for_status()
+    def test_get_status(self):
+        response = requests.request("GET", settings.GATEWAY_URL+"/system/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("overall_status", data)
+        self.assertIn("checks", data)
+        self.assertIn("orion", data["checks"])
+        self.assertIn("postgres", data["checks"])
+        self.assertIn("redis", data["checks"])
+        # Check if overall_status is "healthy"
+        self.assertEqual(data["overall_status"], "healthy")
+
+    def test_get_version_info(self):
+        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("application_version", data)
+        self.assertIn("dependencies", data)
+        dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+        for dep in dependencies:
+            self.assertIn(dep, data["dependencies"])
+            self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
 
     def tearDown(self) -> None:
         """
