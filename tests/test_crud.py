@@ -1,6 +1,6 @@
 import json
 import requests
-from backend.api.main import Datapoint, DatapointUpdate
+from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
 
@@ -146,7 +146,7 @@ class TestCRUD(TestInit):
                                      headers=headers,
                                      data=datapoint_basis1.json()
                                      )
-        self.assertEqual(response1.status_code, 422) # 422 is for validation error
+        self.assertEqual(response1.status_code, 422)  # 422 is for validation error
 
         # check if topic and json_path are unchanged
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
