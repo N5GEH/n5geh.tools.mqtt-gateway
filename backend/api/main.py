@@ -244,9 +244,9 @@ async def add_datapoint(
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
-    object_id: str,
-    datapoint: Datapoint,
-    conn: asyncpg.Connection = Depends(get_connection),
+        object_id: str,
+        datapoint: Datapoint,
+        conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
     Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
@@ -256,11 +256,12 @@ async def update_datapoint(
         datapoint (Datapoint): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
-    Raises:
-        HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
-        HTTPException: If the datapoint to be updated is not found, a 404 error will be raised.
-        Exception: If some other error occurs, a 500 error will be raised.
-    """
+        Raises:
+            HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+            HTTPException: If the datapoint to be updated is not found, a 404 error will be raised.
+            HTTPException: Raises a 422 error if attempts are made to modify the original datapoint's jsonpath or topic.
+            Exception: If some other error occurs, a 500 error will be raised.
+        """
     # Validate input data: Ensure that entity_id and attribute_name are provided if matchDatapoint is True
     if datapoint.matchDatapoint and (not datapoint.entity_id or not datapoint.attribute_name):
         raise HTTPException(
@@ -279,6 +280,10 @@ async def update_datapoint(
             # Raise a 404 error if the datapoint does not exist
             if not existing_datapoint:
                 raise HTTPException(status_code=404, detail="Datapoint not found!")
+
+            # Check if the topic or jsonpath field is being updated
+            if datapoint.topic != existing_datapoint['topic'] or datapoint.jsonpath != existing_datapoint['jsonpath']:
+                raise HTTPException(status_code=422, detail="Updating the topic or jsonpath field is not allowed!")
 
             # Update the datapoint in the database
             await conn.execute(
