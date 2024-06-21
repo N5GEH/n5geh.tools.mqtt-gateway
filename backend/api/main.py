@@ -6,13 +6,15 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, Extra
+from pydantic import BaseModel, Field
 from redis import asyncio as aioredis
 import aiohttp
 from settings import settings
 import logging
 import time
-from __version__ import application_version
+
+
+__version__ = "0.2.0"
 app = FastAPI()
 # enable CORS for the frontend
 app.add_middleware(
@@ -460,7 +462,7 @@ async def get_version_info():
         return importlib.metadata.version(package)
     version_results = [get_dependency_version(dep) for dep in dependencies]
     version_info = {
-        "application_version": application_version,
+        "application_version": __version__,
         "dependencies": dict(zip(dependencies, version_results))
     }
     return version_info
