@@ -3,6 +3,7 @@ import requests
 from backend.api.main import Datapoint, DatapointUpdate
 from test_settings import settings
 from tests.test_init import TestInit
+import importlib
 
 
 class TestCRUD(TestInit):
