@@ -5,11 +5,14 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, Extra
+from pydantic import BaseModel, Field, Extra, validator
 from redis import asyncio as aioredis
 import aiohttp
-from settings import settings
+import sys
 import logging
+import re
+sys.path.append('../../n5geh.tools.mqtt-gateway')
+from settings import settings
 
 app = FastAPI()
 # enable CORS for the frontend
@@ -41,7 +44,14 @@ class Datapoint(BaseModel):
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
-    matchDatapoint: Optional[bool] = False
+    connected: Optional[bool] = False
+
+    @validator('object_id')
+    def validate_object_id(cls, value):
+        if value is not None:
+            if not re.match(r'^[a-zA-Z0-9_\-:]+$', value):
+                raise ValueError('object_id contains invalid characters')
+        return value
 
 
 class DatapointUpdate(BaseModel):
@@ -49,6 +59,9 @@ class DatapointUpdate(BaseModel):
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
+    # connected: Optional[bool] = False
+
+
 
 
 @app.on_event("startup")
@@ -78,7 +91,7 @@ async def startup():
                 entity_type TEXT,
                 attribute_name TEXT,
                 description TEXT,
-                matchDatapoint BOOLEAN DEFAULT FALSE
+                connected BOOLEAN DEFAULT FALSE
             )"""
         )
 
@@ -150,13 +163,14 @@ async def get_datapoint(
     return row
 
 
+
 @app.post(
     "/data",
     response_model=Datapoint,
     status_code=201,
     summary="Add a new datapoint to the gateway",
     description="Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway. \
-                       In (a very unlikely) case where the datapoint was supposed to be match but the corresponding information is not provided, \
+                       In (a very unlikely) case where the datapoint was supposed to be matched but the corresponding information is not provided, \
                        an error will be raised. If the datapoint is successfully added, a notification will be sent to the database to notify the \
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
@@ -178,13 +192,33 @@ async def add_datapoint(
         UniqueViolationError: If the object_id of the datapoint already exists in the database, a 409 error will be raised.
         Exception: If some other error occurs, a 500 error will be raised.
     """
-    datapoint.object_id = str(uuid4())
-    if datapoint.matchDatapoint and (
+    # Generate a new 6-character object_id if not provided
+    if datapoint.object_id is None:
+        while True:
+            new_id = str(uuid4())[:6]
+            existing = await conn.fetchrow(
+                """SELECT object_id FROM datapoints WHERE object_id=$1""",
+                new_id
+            )
+            if not existing:
+                datapoint.object_id = new_id
+                break
+
+    else:
+        # Check if the provided object_id is unique
+        existing = await conn.fetchrow(
+            """SELECT object_id FROM datapoints WHERE object_id=$1""",
+            datapoint.object_id
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="object_id already exists!")
+
+    if datapoint.connected and (
         datapoint.entity_id is None or datapoint.attribute_name is None
     ):
         raise HTTPException(
             status_code=400,
-            detail="entity_id and attribute_name must be set if Match Datapoint is enabled!",
+            detail="entity_id and attribute_name must be set if connected is enabled!",
         )
     try:
         async with conn.transaction():
@@ -206,12 +240,6 @@ async def add_datapoint(
                 datapoint.description,
             )
 
-        # store the jsonpath and topic in redis for easy retrieval later
-        # await app.state.redis.set(
-        #     datapoint.object_id,
-        #     json.dumps({"jsonpath": datapoint.jsonpath, "topic": datapoint.topic}),
-        # )
-
         await app.state.redis.hset(
             datapoint.topic,
             datapoint.object_id,
@@ -231,10 +259,9 @@ async def add_datapoint(
         if not subscribed:
             stream_name = "manage_topics"
             await app.state.notifier.xadd(
-                    stream_name,
-                    {'subscribe': datapoint.topic},
-                )
-
+                stream_name,
+                {'subscribe': datapoint.topic},
+            )
 
         return {**datapoint.dict(), "subscribe": subscribed is None}
 
@@ -244,6 +271,7 @@ async def add_datapoint(
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 
 @app.put(
@@ -268,36 +296,46 @@ async def update_datapoint(
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
     """
-    async with conn.transaction():
-        await conn.execute(
-            """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
-            datapoint.entity_id,
-            datapoint.entity_type,
-            datapoint.attribute_name,
-            datapoint.description,
+
+    # Add validation to ensure entity_id, entity_type, and attribute_name are not None
+    if datapoint.entity_id is None or datapoint.entity_type is None or datapoint.attribute_name is None:
+        raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null")
+
+    try:
+        async with conn.transaction():
+            await conn.execute(
+                """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
+                datapoint.entity_id,
+                datapoint.entity_type,
+                datapoint.attribute_name,
+                datapoint.description,
+                object_id,
+            )
+
+            row = await conn.fetchrow(
+                """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
+            )
+
+        await app.state.redis.hset(
+            row['topic'],
             object_id,
+            json.dumps(
+                {
+                    "object_id": object_id,
+                    "jsonpath": row['jsonpath'],
+                    "entity_id": datapoint.entity_id,
+                    "entity_type": datapoint.entity_type,
+                    "attribute_name": datapoint.attribute_name,
+                    "description": datapoint.description,
+                }
+            ),
         )
 
-        jsonpath, topic = await conn.fetchrow(
-            """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
-        )
-    await app.state.redis.hset(
-        topic,
-        object_id,
-        json.dumps(
-            {
-                "object_id": object_id,
-                "jsonpath": jsonpath,
-                "entity_id": datapoint.entity_id,
-                "entity_type": datapoint.entity_type,
-                "attribute_name": datapoint.attribute_name,
-                "description": datapoint.description,
-            }
-        ),
-    )
+        return {**datapoint.dict()}
 
-    return {**datapoint.dict()}
-
+    except Exception as e:
+        logging.error(f"Error updating datapoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error!")
 
 @app.delete(
     "/data/{object_id}",
@@ -335,21 +373,18 @@ async def delete_datapoint(
                 """DELETE FROM datapoints WHERE object_id=$1""", object_id
             )
 
-        # await app.state.redis.delete(object_id)
         await app.state.redis.hdel(datapoint["topic"], object_id)
 
         if not unsubscribe:
-            # await app.state.notifier.publish("unsubscribe", datapoint["topic"])
             stream_name = "manage_topics"
             await app.state.notifier.xadd(
-                    stream_name,
-                    {'unsubscribe': datapoint["topic"]},
-                )
+                stream_name,
+                {'unsubscribe': datapoint["topic"]},
+            )
         return None
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
-
 
 @app.delete(
     "/data",
@@ -381,11 +416,17 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
         for datapoint in datapoints:
             await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
         return None
+    
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
-
+@app.get(
+    "/data/{object_id}/status",
+    response_model=bool,
+    summary="Get the match status of a specific datapoint",
+    description="Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.",
+)
 @app.get(
     "/data/{object_id}/status",
     response_model=bool,
@@ -416,10 +457,17 @@ async def get_match_status(
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
     async with aiohttp.ClientSession() as session:
-        response = await session.get(
-            f"{ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}/?type={row['entity_type']}"
-        )
-        return response.status == 200
+        entity_id = row['entity_id']
+        attribute_name = row['attribute_name']
+        entity_type = row['entity_type']
+        url = f"{ORION_URL}/v2/entities/{entity_id}/attrs/{attribute_name}/?type={entity_type}"
+        response = await session.get(url)
+        match_status = response.status == 200
+        logging.info(f"Checking match status for entity_id: {entity_id}, attribute_name: {attribute_name}, entity_type: {entity_type}")
+        logging.info(f"Request URL: {url}")
+        logging.info(f"Response status: {response.status}")
+        return match_status
+
 
 @app.get("/system/status",
     response_model=dict,
@@ -433,7 +481,6 @@ async def get_status():
         "redis": await check_redis(),
     }
     return system_status
-
 
 async def check_orion():
     """
