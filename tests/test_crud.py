@@ -1,13 +1,18 @@
 import json
 import requests
+<<<<<<< HEAD
 import sys
 import re
 
 sys.path.append("../../n5geh.tools.mqtt-gateway")
 
 from backend.api.main import Datapoint, DatapointUpdate
+=======
+from backend.api.main import Datapoint
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 from test_settings import settings
 from tests.test_init import TestInit
+import importlib
 
 class TestCRUD(TestInit):
     """
@@ -130,7 +135,7 @@ class TestCRUD(TestInit):
                                     headers=headers, data=datapoint6.json())
         self.assertTrue(response.ok)
 
-    def test_update(self):
+    def test_update_put(self):
         headers = {
             'Accept': 'application/json'
         }
@@ -143,8 +148,11 @@ class TestCRUD(TestInit):
         )
 
         # update topic, should be rejected
+        original_topic = datapoint_basis.topic
+        original_jsonpath = datapoint_basis.jsonpath
         datapoint_basis1 = datapoint_basis.copy()
         datapoint_basis1.topic = datapoint_basis1.topic + "/updated"
+<<<<<<< HEAD
         datapoint_basis1.entity_id = None  # Ensure this triggers a failure
         datapoint_basis1.entity_type = None  # Ensure this triggers a failure
         datapoint_basis1.attribute_name = None  # Ensure this triggers a failure
@@ -161,6 +169,27 @@ class TestCRUD(TestInit):
 
         # connected
         datapoint_basis_update = DatapointUpdate(
+=======
+        datapoint_basis1.jsonpath = datapoint_basis1.jsonpath + "/updated"
+        response1 = requests.request("PUT", settings.GATEWAY_URL + "/data/" + object_id,
+                                     headers=headers,
+                                     data=datapoint_basis1.json()
+                                     )
+        self.assertEqual(response1.status_code, 422)  # 422 is for validation error
+
+        # check if topic and json_path are unchanged
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        updated_datapoint = Datapoint(
+            **json.loads(response.text)
+        )
+        self.assertEqual(original_topic, updated_datapoint.topic)
+        self.assertEqual(original_jsonpath, updated_datapoint.jsonpath)
+
+        # match datapoint
+        datapoint_basis_update = Datapoint(
+            jsonpath=datapoint_basis.jsonpath,
+            topic=datapoint_basis.topic,
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
             entity_id=self.test_entity.id,
             entity_type=self.test_entity.type,
             attribute_name=self.test_entity.get_attribute_names().pop(),
@@ -188,6 +217,7 @@ class TestCRUD(TestInit):
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertFalse(response.ok)
 
+<<<<<<< HEAD
     def test_match_datapoints(self):
         headers = {
             'Accept': 'application/json'
@@ -352,3 +382,27 @@ class TestCRUD(TestInit):
         # verify the auto-generated object_id does not already exist
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
+=======
+    def test_get_status(self):
+        response = requests.request("GET", settings.GATEWAY_URL+"/system/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("overall_status", data)
+        self.assertIn("checks", data)
+        self.assertIn("orion", data["checks"])
+        self.assertIn("postgres", data["checks"])
+        self.assertIn("redis", data["checks"])
+        # Check if overall_status is "healthy"
+        self.assertEqual(data["overall_status"], "healthy")
+
+    def test_get_version_info(self):
+        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("application_version", data)
+        self.assertIn("dependencies", data)
+        dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+        for dep in dependencies:
+            self.assertIn(dep, data["dependencies"])
+            self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae

@@ -1,3 +1,4 @@
+import importlib
 import json
 from typing import List, Optional
 from uuid import uuid4
@@ -5,15 +6,25 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+<<<<<<< HEAD
 from pydantic import BaseModel, Field, Extra, validator
+=======
+from pydantic import BaseModel, Field
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 from redis import asyncio as aioredis
 import aiohttp
 import sys
 import logging
+<<<<<<< HEAD
 import re
 sys.path.append('../../n5geh.tools.mqtt-gateway')
 from settings import settings
+=======
+import time
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 
+
+__version__ = "0.2.0"
 app = FastAPI()
 # enable CORS for the frontend
 app.add_middleware(
@@ -53,6 +64,7 @@ class Datapoint(BaseModel):
                 raise ValueError('object_id contains invalid characters')
         return value
 
+<<<<<<< HEAD
 
 class DatapointUpdate(BaseModel):
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -64,6 +76,8 @@ class DatapointUpdate(BaseModel):
 
 
 
+=======
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 @app.on_event("startup")
 async def startup():
     """
@@ -162,8 +176,11 @@ async def get_datapoint(
         raise HTTPException(status_code=404, detail="Device not found!")
     return row
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 @app.post(
     "/data",
     response_model=Datapoint,
@@ -276,23 +293,24 @@ async def add_datapoint(
 
 @app.put(
     "/data/{object_id}",
-    response_model=DatapointUpdate,
+    response_model=Datapoint,
     summary="Update a specific datapoint in the gateway",
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
-    object_id: str,
-    datapoint: DatapointUpdate,
-    conn: asyncpg.Connection = Depends(get_connection),
+        object_id: str,
+        datapoint: Datapoint,
+        conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
     Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
 
     Args:
         object_id (str): The object_id of the datapoint to be updated.
-        datapoint (DatapointUpdate): The updated datapoint.
+        datapoint (Datapoint): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
+<<<<<<< HEAD
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
     """
@@ -305,10 +323,45 @@ async def update_datapoint(
         async with conn.transaction():
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
+=======
+        Raises:
+            HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+            HTTPException: If the datapoint to be updated is not found, a 404 error will be raised.
+            HTTPException: Raises a 422 error if attempts are made to modify the original datapoint's jsonpath or topic.
+            Exception: If some other error occurs, a 500 error will be raised.
+        """
+    # Validate input data: Ensure that entity_id and attribute_name are provided if matchDatapoint is True
+    if datapoint.matchDatapoint and (not datapoint.entity_id or not datapoint.attribute_name):
+        raise HTTPException(
+            status_code=400,
+            detail="entity_id and attribute_name must be set if Match Datapoint is enabled!"
+        )
+
+    try:
+        # Start a transaction to ensure atomicity
+        async with conn.transaction():
+            # Fetch the existing datapoint from the database
+            existing_datapoint = await conn.fetchrow(
+                """SELECT * FROM datapoints WHERE object_id=$1""",
+                object_id
+            )
+            # Raise a 404 error if the datapoint does not exist
+            if not existing_datapoint:
+                raise HTTPException(status_code=404, detail="Datapoint not found!")
+
+            # Check if the topic or jsonpath field is being updated
+            if datapoint.topic != existing_datapoint['topic'] or datapoint.jsonpath != existing_datapoint['jsonpath']:
+                raise HTTPException(status_code=422, detail="Updating the topic or jsonpath field is not allowed!")
+
+            # Update the datapoint in the database
+            await conn.execute(
+                """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4, matchDatapoint=$5 WHERE object_id=$6""",
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
                 datapoint.entity_id,
                 datapoint.entity_type,
                 datapoint.attribute_name,
                 datapoint.description,
+<<<<<<< HEAD
                 object_id,
             )
 
@@ -318,11 +371,27 @@ async def update_datapoint(
 
         await app.state.redis.hset(
             row['topic'],
+=======
+                datapoint.matchDatapoint,
+                object_id,
+            )
+
+            # Extract jsonpath and topic from the existing datapoint
+            jsonpath, topic = existing_datapoint['jsonpath'], existing_datapoint['topic']
+
+        # Update the datapoint in Redis
+        await app.state.redis.hset(
+            topic,
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
             object_id,
             json.dumps(
                 {
                     "object_id": object_id,
+<<<<<<< HEAD
                     "jsonpath": row['jsonpath'],
+=======
+                    "jsonpath": jsonpath,
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
                     "entity_id": datapoint.entity_id,
                     "entity_type": datapoint.entity_type,
                     "attribute_name": datapoint.attribute_name,
@@ -331,7 +400,22 @@ async def update_datapoint(
             ),
         )
 
+<<<<<<< HEAD
         return {**datapoint.dict()}
+=======
+        # Return the updated datapoint as a dictionary
+        return {**datapoint.dict()}
+
+    # Log and re-raise HTTP exceptions
+    except HTTPException as e:
+        logging.error(f"HTTPException: {str(e)}")
+        raise e
+
+    # Log any other exceptions and raise a 500 Internal Server Error
+    except Exception as e:
+        logging.error(f"Error updating datapoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 
     except Exception as e:
         logging.error(f"Error updating datapoint: {e}")
@@ -475,47 +559,93 @@ async def get_match_status(
     description="Get the status of the system. This is to allow the frontend to check whether the system is running properly.",
 )
 async def get_status():
-    system_status = {
+    checks = {
         "orion": await check_orion(),
         "postgres": await check_postgres(),
         "redis": await check_redis(),
     }
+
+    overall_status = "healthy" if all(check["status"] for check in checks.values()) else "unhealthy"
+
+    system_status = {
+        "overall_status": overall_status,
+        "checks": checks,
+    }
     return system_status
 
+<<<<<<< HEAD
+=======
+@app.get("/system/version",
+         response_model=dict,
+         summary="Get the version of the system and the dependencies",
+         description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
+)
+async def get_version_info():
+    """
+    Return version information for the application and its dependencies.
+    """
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+    def get_dependency_version(package: str):
+        """
+        Get the version of a package.
+        """
+        return importlib.metadata.version(package)
+    version_results = [get_dependency_version(dep) for dep in dependencies]
+    version_info = {
+        "application_version": __version__,
+        "dependencies": dict(zip(dependencies, version_results))
+    }
+    return version_info
+
+>>>>>>> 8eac4b7a087ad82531b03a22255826dcbba553ae
 async def check_orion():
     """
     Check whether the Orion Context Broker is running properly.
     """
+    start_time = time.time()
     try:
         async with aiohttp.ClientSession() as session:
             response = await session.get(f"{ORION_URL}/version")
-            return response.status == 200
+            status = response.status == 200
+            latency = (time.time() - start_time)*1000
+            return {"status": status, "latency": latency, "latency_unit": "ms",
+                    "message": None if status else "Failed to connect"}
     except Exception as e:
+        latency = time.time() - start_time
         logging.error(f"Error checking Orion: {e}")
-        return False
-
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
     """
+    start_time = time.time()
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
-            return True
+            latency = (time.time() - start_time)*1000
+            return {"status": True, "latency": latency,
+                    "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking PostgreSQL: {e}")
-        return False
-
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 async def check_redis():
     """
     Check whether the Redis cache is running properly.
     """
+    start_time = time.time()
     try:
         await app.state.redis.ping()
-        return True
+        latency = (time.time() - start_time)*1000
+        return {"status": True, "latency": latency,
+                "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking Redis: {e}")
-        return False
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
