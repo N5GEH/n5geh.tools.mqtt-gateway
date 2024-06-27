@@ -9,7 +9,7 @@ export interface Datapoint {
     entity_id: string | null; // Can be a string or null
     entity_type: string | null; // Can be a string or null
     attribute_name: string | null; // Can be a string or null
-    matchDatapoint: boolean;
+    connected: boolean;
     status?: string | boolean | null; // Can be a string, boolean, or null
 }
 
@@ -27,28 +27,37 @@ export interface SystemStatus {
     redis: boolean;
 }
 
-
 export const fetchData = async (): Promise<Datapoint[]> => {
     const response: Response = await fetch(`${API_URL}/data`);
     const responseData = await response.json();
     let data: Datapoint[] = await Promise.all(responseData.map(async row => {
         row.status = await getStatus(row.object_id);
         return row;
-      }));
+    }));
     return data;
 };
 
 export const addData = async (data: Datapoint) => {
+    // Destructure the object to separate object_id
+    const { object_id, ...dataWithoutObjectId } = data;
+    // Create the payload conditionally including object_id
+    const payload = object_id ? data : dataWithoutObjectId;
+
     const response: Response = await fetch(`${API_URL}/data`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
     });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to add data: ${response.statusText}`);
+    }
+    
     const responseData = await response.json();
     return responseData;
-}
+};
 
 export const updateData = async (data: DatapointUpdate) => {
     const response: Response = await fetch(`${API_URL}/data/${data.object_id}`, {
@@ -79,13 +88,13 @@ export const deleteData = async (object_id: string): Promise<Datapoint | null> =
     return responseData;
 }
 
-export const getStatus = async (object_id: string): Promise<string | boolean | null> => {
+export const getStatus = async (object_id: string): Promise<boolean> => {
     const response: Response = await fetch(`${API_URL}/data/${object_id}/status`);
     if (!response.ok) {
         throw new Error(`Failed to get status for datapoint with object_id ${object_id}`);
     }
     const responseData = await response.json();
-    return responseData.status;
+    return responseData; // Assuming the response is a boolean indicating the match status
 }
 
 export const getSystemStatus = async (): Promise<SystemStatus> => {

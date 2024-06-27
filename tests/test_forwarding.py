@@ -1,6 +1,10 @@
 import json
 import time
 from filip.models.ngsi_v2.context import ContextEntity
+
+import sys
+sys.path.append("../../n5geh.tools.mqtt-gateway")
+
 from backend.api.main import Datapoint
 from test_init import TestInit
 from test_settings import settings
