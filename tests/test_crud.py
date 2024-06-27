@@ -183,6 +183,119 @@ class TestCRUD(TestInit):
             json.loads(response.text).pop("matchDatapoint")
         )
 
+    def test_partial_update_patch(self):
+        headers = {
+            'Accept': 'application/json'
+        }
+        object_id = self.unmatched_object_id
+
+        # Perform initial GET to fetch the existing datapoint
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        datapoint_basis = Datapoint(
+            **json.loads(response.text)
+        )
+
+        # Test case 1: Successful partial update of entity_id and attribute_name
+        update_data = {
+            "entity_id": "NewEntityID",
+            "attribute_name": "NewAttributeName"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(update_data))
+        self.assertTrue(response.ok)
+
+        # Verify the update
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        updated_datapoint = Datapoint(
+            **json.loads(response.text)
+        )
+        self.assertEqual(updated_datapoint.entity_id, update_data["entity_id"])
+        self.assertEqual(updated_datapoint.attribute_name, update_data["attribute_name"])
+
+        # Test case 2: Attempt to update forbidden fields jsonpath and topic
+        forbidden_update_data = {
+            "jsonpath": "$..new_jsonpath",
+            "topic": "new/topic"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(forbidden_update_data))
+        self.assertFalse(response.ok)
+        self.assertEqual(response.status_code, 400)
+
+        # Verify that jsonpath and topic are unchanged
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        updated_datapoint = Datapoint(
+            **json.loads(response.text)
+        )
+        self.assertEqual(updated_datapoint.jsonpath, datapoint_basis.jsonpath)
+        self.assertEqual(updated_datapoint.topic, datapoint_basis.topic)
+
+        # Test case 3: Provide only entity_id without attribute_name
+        invalid_update_data1 = {
+            "entity_id": "AnotherNewEntityID"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(invalid_update_data1))
+        # Check if attribute_name is set
+        self.assertTrue("attribute_name" in response.json())
+        self.assertEqual(response.status_code, 200)
+
+        # Test case 4: Provide only attribute_name without entity_id
+        invalid_update_data2 = {
+            "attribute_name": "AnotherNewAttributeName"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(invalid_update_data2))
+        # Check if attribute_name is set
+        self.assertTrue("entity_id" in response.json())
+        self.assertEqual(response.status_code, 200)
+
+        # Test case 5: Attempt to update matchDatapoint field
+        invalid_update_data3 = {
+            "matchDatapoint": True
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(invalid_update_data3))
+        self.assertFalse(response.ok)
+        self.assertEqual(response.status_code, 400)
+
+        # Test case 6: Update entity_type field
+        update_entity_type_data = {
+            "entity_type": "NewEntityType"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(update_entity_type_data))
+        self.assertTrue(response.ok)
+
+        # Verify the entity_type update
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        updated_datapoint = Datapoint(
+            **json.loads(response.text)
+        )
+        self.assertEqual(updated_datapoint.entity_type, update_entity_type_data["entity_type"])
+
+        # Test case 7: Update description field
+        update_description_data = {
+            "description": "Updated description"
+        }
+        response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
+                                    headers=headers,
+                                    data=json.dumps(update_description_data))
+        self.assertTrue(response.ok)
+
+        # Verify the description update
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+        updated_datapoint = Datapoint(
+            **json.loads(response.text)
+        )
+        self.assertEqual(updated_datapoint.description, update_description_data["description"])
+
     def test_delete(self):
         object_id = self.unmatched_object_id
         response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id)
