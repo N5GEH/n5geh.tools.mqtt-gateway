@@ -1,6 +1,6 @@
 import importlib
 import json
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import uuid4
 import asyncpg
 import uvicorn
@@ -144,6 +144,41 @@ async def get_datapoint(
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
     return row
+
+
+@app.post(
+    "/data/search",
+    response_model=List[Datapoint],
+    summary="Get datapoints based on filters",
+    description="Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.",
+)
+async def get_datapoints_by_filters(
+    filters: Optional[Dict[str, str]] = None,
+    conn: asyncpg.Connection = Depends(get_connection)
+):
+    """
+    Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.
+
+    Args:
+        filters (Dict[str, str], optional): The filters to be applied. Each key-value pair in the dictionary represents an attribute and the value to filter by.
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+
+    Returns:
+        List[Datapoint]: The list of datapoints that match the provided filters.
+    """
+    query = "SELECT * FROM datapoints WHERE 1=1"
+    params = []
+    if filters is not None:
+        for i, (key, value) in enumerate(filters.items(), start=1):
+            query += f" AND {key}=${i}"
+            params.append(value)
+    try:
+        rows = await conn.fetch(query, *params)
+    except Exception as e:
+        logging.error(f"Error executing query: {e}")
+        return []
+    return rows
+
 
 @app.post(
     "/data",

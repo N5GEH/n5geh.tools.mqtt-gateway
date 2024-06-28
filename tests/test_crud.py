@@ -212,3 +212,44 @@ class TestCRUD(TestInit):
         for dep in dependencies:
             self.assertIn(dep, data["dependencies"])
             self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
+
+    def test_get_datapoints_by_filters(self):
+        headers = {
+            'Accept': 'application/json'
+        }
+
+        # Create a datapoint to be used in the test
+        datapoint = Datapoint(
+            **{
+                "topic": "topic/of/test",
+                "jsonpath": "$..data"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=datapoint.json())
+        self.assertTrue(response.ok)
+
+        # Test the get_datapoints_by_filters endpoint with valid filters
+        filters = {"topic": "topic/of/test", "jsonpath": "$..data"}
+        response = requests.request("POST", settings.GATEWAY_URL + "/data/search", headers=headers, json=filters)
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json()[0]['topic'], filters['topic'])
+        self.assertEqual(response.json()[0]['jsonpath'], filters['jsonpath'])
+
+        # Test the get_datapoints_by_filters endpoint with no filters
+        response = requests.request("POST", settings.GATEWAY_URL + "/data/search", headers=headers, json={})
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+
+        # Test the get_datapoints_by_filters endpoint with nonexistent filters
+        filters = {"nonexistent": "value"}
+        response = requests.request("POST", settings.GATEWAY_URL + "/data/search", headers=headers, json=filters)
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json(), [])
+
+        # Test the get_datapoints_by_filters endpoint with invalid filters
+        filters = {"topic": 123, "jsonpath": 456}
+        response = requests.request("POST", settings.GATEWAY_URL + "/data/search", headers=headers, json=filters)
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json(), [])
