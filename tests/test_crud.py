@@ -2,6 +2,7 @@ import json
 import requests
 import sys
 import re
+import pydantic
 
 sys.path.append("../../n5geh.tools.mqtt-gateway")
 
@@ -289,42 +290,43 @@ class TestCRUD(TestInit):
         self.assertFalse(response.ok)
 
     def test_object_id_character_set(self):
-    headers = {
-        'Accept': 'application/json'
-    }
 
-    valid_ids = ["valid_id_123", "valid-id-123", "valid:id:123", "valid_id-123"]
-    invalid_ids = ["invalid id", "invalid*id", "invalid?id", "invalid/id"]
+        headers = {
+            'Accept': 'application/json'
+        }
 
-    # test valid ids
-    for valid_id in valid_ids:
-        datapoint = Datapoint(
-            **{
-                "object_id": valid_id,
-                "topic": "topic/of/id_test",
-                "jsonpath": "$..data1"
-            }
-        )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=datapoint.json())
-        print(f"Testing valid_id: {valid_id} - Response: {response.status_code}")
-        self.assertTrue(response.ok)
+        valid_ids = ["valid_id_123", "valid-id-123", "valid:id:123", "valid_id-123"]
+        invalid_ids = ["invalid id", "invalid*id", "invalid?id", "invalid/id"]
 
-    # test invalid ids
-    for invalid_id in invalid_ids:
-        try:
+        # test valid ids
+        for valid_id in valid_ids:
             datapoint = Datapoint(
                 **{
-                    "object_id": invalid_id,
+                    "object_id": valid_id,
                     "topic": "topic/of/id_test",
                     "jsonpath": "$..data1"
                 }
             )
             response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                                         data=datapoint.json())
-        except Exception as e:
-            print(f"Testing invalid_id: {invalid_id} - Expected Validation Error: {str(e)}")
-            self.assertTrue(isinstance(e, pydantic.error_wrappers.ValidationError))
+            print(f"Testing valid_id: {valid_id} - Response: {response.status_code}")
+            self.assertTrue(response.ok)
+
+        # test invalid ids
+        for invalid_id in invalid_ids:
+            try:
+                datapoint = Datapoint(
+                    **{
+                        "object_id": invalid_id,
+                        "topic": "topic/of/id_test",
+                        "jsonpath": "$..data1"
+                    }
+                )
+                response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                            data=datapoint.json())
+            except Exception as e:
+                print(f"Testing invalid_id: {invalid_id} - Expected Validation Error: {str(e)}")
+                self.assertTrue(isinstance(e, pydantic.error_wrappers.ValidationError))
 
 
 
@@ -350,7 +352,7 @@ class TestCRUD(TestInit):
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
     
-        def test_partial_update_patch(self):
+    def test_partial_update_patch(self):
         headers = {
             'Accept': 'application/json'
         }
