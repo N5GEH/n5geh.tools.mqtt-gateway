@@ -11,6 +11,7 @@ import aiohttp
 
 import logging
 import re
+import time
 
 import sys
 sys.path.append('../../n5geh.tools.mqtt-gateway')
@@ -307,15 +308,21 @@ async def update_datapoint(
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
-        HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
-    """
-
+             HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
+             HTTPException: If the datapoint to be updated is not found, a 404 error will be raised.
+             HTTPException: Raises a 422 error if attempts are made to modify the original datapoint's jsonpath or topic.
+             Exception: If some other error occurs, a 500 error will be raised.
+         """
+    
+    # Validate input data: Ensure that entity_id and attribute_name are provided if matchDatapoint is True
     # Add validation to ensure entity_id, entity_type, and attribute_name are not None
     if datapoint.entity_id is None or datapoint.entity_type is None or datapoint.attribute_name is None:
         raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null")
 
     try:
+        # Start a transaction to ensure atomicity
         async with conn.transaction():
+            
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
