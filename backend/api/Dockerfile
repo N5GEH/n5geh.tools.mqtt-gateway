@@ -24,4 +24,4 @@ COPY ./backend/api/. ./
 EXPOSE 8000
 
 # Run the app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--ssl-certfile", "/app/certs/mydev.crt", "--ssl-keyfile", "/app/certs/mydev.key"]

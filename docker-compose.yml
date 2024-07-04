@@ -23,8 +23,13 @@ services:
       - "8000:8000"
     networks:
       - default
-#    volumes:
+    volumes:
 #      - ./backend/api:/app  # for hot reloading
+      - ./certs:/app/certs  # Mount the host's ./certs directory to /app/certs in the container
+    environment:
+      - CERTFILE=/app/certs/mydev.crt  # Adjust these environment variables
+      - KEYFILE=/app/certs/mydev.key    # to match the mounted volume's path
+
     env_file:
       - .env
     depends_on:
