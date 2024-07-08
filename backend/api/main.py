@@ -65,12 +65,6 @@ class DatapointUpdate(BaseModel):
     description: Optional[str] = ""
     # connected: Optional[bool] = False
 
-class DatapointPartialUpdate(BaseModel):
-    entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
-    entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
-    attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = ""
-
 
 @app.on_event("startup")
 async def startup():
@@ -290,7 +284,9 @@ async def add_datapoint(
     "/data/{object_id}",
     response_model=DatapointUpdate,
     summary="Update a specific datapoint in the gateway",
-    description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
+    description="Update a specific datapoint in the gateway. This is to allow the "
+                "frontend to match a datapoint to an existing entity/attribute pair "
+                "in the Context Broker.",
 )
 async def update_datapoint(
     object_id: str,
@@ -364,7 +360,7 @@ async def update_datapoint(
 )
 async def partial_update_datapoint(
     object_id: str,
-    datapoint_update: DatapointPartialUpdate,
+    datapoint_update: DatapointUpdate,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
     existing_datapoint = await conn.fetchrow(

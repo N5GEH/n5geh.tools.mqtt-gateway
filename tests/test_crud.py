@@ -6,7 +6,7 @@ import pydantic
 
 sys.path.append("../../n5geh.tools.mqtt-gateway")
 
-from backend.api.main import Datapoint, DatapointUpdate, DatapointPartialUpdate
+from backend.api.main import Datapoint, DatapointUpdate
 from test_settings import settings
 from tests.test_init import TestInit
 
