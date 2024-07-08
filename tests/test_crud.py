@@ -6,7 +6,7 @@ import pydantic
 
 sys.path.append("../../n5geh.tools.mqtt-gateway")
 
-from backend.api.main import Datapoint, DatapointUpdate, DatapointPartialUpdate
+from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
 
@@ -201,7 +201,9 @@ class TestCRUD(TestInit):
         self.assertIn("entity_id, entity_type, and attribute_name cannot be null", response1.text)
 
         # Perform a valid update with correct entity information
-        datapoint_basis_update = DatapointUpdate(
+        datapoint_basis_update = Datapoint(
+            jsonpath=datapoint_basis.jsonpath,
+            topic=datapoint_basis.topic,
             entity_id=self.test_entity.id,
             entity_type=self.test_entity.type,
             attribute_name=self.test_entity.get_attribute_names().pop(),

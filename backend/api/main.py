@@ -55,15 +55,6 @@ class Datapoint(BaseModel):
                 raise ValueError('object_id contains invalid characters')
         return value
 
-
-class DatapointUpdate(BaseModel):
-    entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
-    entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
-    attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = ""
-    connected: Optional[bool] = None
-    fiware_service: Optional[str] = None  # Add this line
-
 class DatapointPartialUpdate(BaseModel):
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -313,7 +304,7 @@ async def add_datapoint(
                 stream_name,
                 {'subscribe': datapoint.topic},
             )
-
+        
         return {**datapoint.dict(), "subscribe": subscribed is None}
 
     except asyncpg.exceptions.UniqueViolationError:
@@ -326,13 +317,13 @@ async def add_datapoint(
 
 @app.put(
     "/data/{object_id}",
-    response_model=DatapointUpdate,
+    response_model=Datapoint,
     summary="Update a specific datapoint in the gateway",
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
     object_id: str,
-    datapoint: DatapointUpdate,
+    datapoint: Datapoint,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
@@ -340,7 +331,7 @@ async def update_datapoint(
 
     Args:
         object_id (str): The object_id of the datapoint to be updated.
-        datapoint (DatapointUpdate): The updated datapoint.
+        datapoint (Datapoint): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
@@ -362,7 +353,20 @@ async def update_datapoint(
     try:
         # Start a transaction to ensure atomicity
         async with conn.transaction():
-            
+            # Fetch the existing datapoint from the database
+            existing_datapoint = await conn.fetchrow(
+                """SELECT * FROM datapoints WHERE object_id=$1""",
+                object_id
+            )
+            # Raise a 404 error if the datapoint does not exist
+            if not existing_datapoint:
+                 raise HTTPException(status_code=404, detail="Datapoint not found!")
+
+            # Check if the topic or jsonpath field is being updated
+            if datapoint.topic != existing_datapoint['topic'] or datapoint.jsonpath != existing_datapoint['jsonpath']:
+                 raise HTTPException(status_code=422, detail="Updating the topic or jsonpath field is not allowed!")
+
+             # Update the datapoint in the database
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
@@ -394,6 +398,7 @@ async def update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
+        # Return the updated datapoint as a dictionary
         return {**datapoint.dict()}
 
     except Exception as e:
