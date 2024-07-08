@@ -328,8 +328,6 @@ class TestCRUD(TestInit):
                 print(f"Testing invalid_id: {invalid_id} - Expected Validation Error: {str(e)}")
                 self.assertTrue(isinstance(e, pydantic.error_wrappers.ValidationError))
 
-
-
     def test_object_id_auto_generation(self):
         headers = {
             'Accept': 'application/json'
@@ -463,8 +461,8 @@ class TestCRUD(TestInit):
         updated_datapoint = Datapoint(
             **json.loads(response.text)
         )
-        self.assertEqual(updated_datapoint.description, update_description_data["description"])
-
+        self.assertEqual(updated_datapoint.description,
+                         update_description_data["description"])
 
     def test_delete(self):
         object_id = self.unmatched_object_id

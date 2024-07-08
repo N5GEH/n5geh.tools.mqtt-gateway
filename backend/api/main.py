@@ -16,7 +16,7 @@ import time
 import sys
 sys.path.append('../../n5geh.tools.mqtt-gateway')
 from settings import settings
-
+__version__ = "0.2.0"
 app = FastAPI()
 # enable CORS for the frontend
 app.add_middleware(
@@ -69,7 +69,6 @@ class DatapointPartialUpdate(BaseModel):
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
-    # connected: Optional[bool] = False
 
 
 @app.on_event("startup")
@@ -149,7 +148,7 @@ async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
                         If the datapoint is not found, an error will be raised.",
 )
 async def get_datapoint(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get a specific datapoint from the gateway. This is to allow the frontend to display a specific datapoint in the database.
@@ -170,8 +169,6 @@ async def get_datapoint(
         raise HTTPException(status_code=404, detail="Device not found!")
     return row
 
-
-
 @app.post(
     "/data",
     response_model=Datapoint,
@@ -183,7 +180,7 @@ async def get_datapoint(
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
 async def add_datapoint(
-    datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
+        datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
@@ -313,7 +310,7 @@ async def update_datapoint(
              HTTPException: Raises a 422 error if attempts are made to modify the original datapoint's jsonpath or topic.
              Exception: If some other error occurs, a 500 error will be raised.
          """
-    
+
     # Validate input data: Ensure that entity_id and attribute_name are provided if matchDatapoint is True
     # Add validation to ensure entity_id, entity_type, and attribute_name are not None
     if datapoint.entity_id is None or datapoint.entity_type is None or datapoint.attribute_name is None:
@@ -322,7 +319,7 @@ async def update_datapoint(
     try:
         # Start a transaction to ensure atomicity
         async with conn.transaction():
-            
+
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
@@ -512,7 +509,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
         for datapoint in datapoints:
             await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
         return None
-    
+
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
@@ -530,7 +527,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
     description="Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.",
 )
 async def get_match_status(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
@@ -566,10 +563,10 @@ async def get_match_status(
 
 
 @app.get("/system/status",
-    response_model=dict,
-    summary="Get the status of the system",
-    description="Get the status of the system. This is to allow the frontend to check whether the system is running properly.",
-)
+         response_model=dict,
+         summary="Get the status of the system",
+         description="Get the status of the system. This is to allow the frontend to check whether the system is running properly.",
+         )
 async def get_status():
     system_status = {
         "orion": await check_orion(),
@@ -578,6 +575,32 @@ async def get_status():
     }
     return system_status
 
+
+@app.get("/system/version",
+         response_model=dict,
+         summary="Get the version of the system and the dependencies",
+         description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
+         )
+async def get_version_info():
+    """
+    Return version information for the application and its dependencies.
+    """
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+
+    def get_dependency_version(package: str):
+        """
+        Get the version of a package.
+        """
+        return importlib.metadata.version(package)
+
+    version_results = [get_dependency_version(dep) for dep in dependencies]
+    version_info = {
+        "application_version": __version__,
+        "dependencies": dict(zip(dependencies, version_results))
+    }
+    return version_info
+
+
 async def check_orion():
     """
     Check whether the Orion Context Broker is running properly.
@@ -585,10 +608,15 @@ async def check_orion():
     try:
         async with aiohttp.ClientSession() as session:
             response = await session.get(f"{ORION_URL}/version")
-            return response.status == 200
+            status = response.status == 200
+            latency = (time.time() - start_time) * 1000
+            return {"status": status, "latency": latency, "latency_unit": "ms",
+                    "message": None if status else "Failed to connect"}
     except Exception as e:
         logging.error(f"Error checking Orion: {e}")
-        return False
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
+
 
 async def check_postgres():
     """
@@ -597,10 +625,15 @@ async def check_postgres():
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
-            return True
+            latency = (time.time() - start_time) * 1000
+            return {"status": True, "latency": latency,
+                    "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking PostgreSQL: {e}")
-        return False
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
+
 
 async def check_redis():
     """
@@ -608,10 +641,14 @@ async def check_redis():
     """
     try:
         await app.state.redis.ping()
-        return True
+        latency = (time.time() - start_time) * 1000
+        return {"status": True, "latency": latency,
+                "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking Redis: {e}")
         return False
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
