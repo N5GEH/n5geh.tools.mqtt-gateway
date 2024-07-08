@@ -1,6 +1,6 @@
 import importlib
 import json
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import uuid4
 import asyncpg
 import uvicorn
@@ -111,19 +111,58 @@ async def get_connection():
 @app.get(
     "/data",
     response_model=List[Datapoint],
-    summary="Get all datapoints from the gateway",
-    description="Get all datapoints from the gateway. This is to allow the frontend to display all the registered datapoints in the database.",
+    summary="Get datapoints based on filters",
+    description="Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.",
 )
-async def get_datapoints(conn: asyncpg.Connection = Depends(get_connection)):
+async def get_datapoints(
+    conn: asyncpg.Connection = Depends(get_connection),
+    object_id: Optional[str] = None,
+    topic: Optional[str] = None,
+    jsonpath: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    attribute_name: Optional[str] = None
+):
     """
-    Get all datapoints from the gateway. This is to allow the frontend to display all the registered datapoints in the database.
+    Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.
+
+    Args:
+        conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
+        object_id (str, optional): The object_id filter.
+        topic (str, optional): The topic filter.
+        jsonpath (str, optional): The jsonpath filter.
+        entity_id (str, optional): The entity_id filter.
+        entity_type (str, optional): The entity_type filter.
+        attribute_name (str, optional): The attribute_name filter.
+
+    Returns:
+        List[Datapoint]: The list of datapoints that match the provided filters.
     """
-    rows = await conn.fetch(
-        "SELECT object_id, jsonpath, topic, entity_id, entity_type, attribute_name, description FROM datapoints"
-    )
+    query = "SELECT * FROM datapoints WHERE 1=1"
+    params = []
+    if object_id is not None:
+        query += f" AND object_id=${len(params)+1}"
+        params.append(object_id)
+    if topic is not None:
+        query += f" AND topic=${len(params)+1}"
+        params.append(topic)
+    if jsonpath is not None:
+        query += f" AND jsonpath=${len(params)+1}"
+        params.append(jsonpath)
+    if entity_id is not None:
+        query += f" AND entity_id=${len(params)+1}"
+        params.append(entity_id)
+    if entity_type is not None:
+        query += f" AND entity_type=${len(params)+1}"
+        params.append(entity_type)
+    if attribute_name is not None:
+        query += f" AND attribute_name=${len(params)+1}"
+        params.append(attribute_name)
+    try:
+        rows = await conn.fetch(query, *params)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return rows
-
-
 @app.get(
     "/data/{object_id}",
     response_model=Datapoint,

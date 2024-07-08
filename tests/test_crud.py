@@ -83,7 +83,7 @@ class TestCRUD(TestInit):
         datapoint5 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$..dat5"
+                "jsonpath": "$..data5"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
@@ -325,3 +325,34 @@ class TestCRUD(TestInit):
         for dep in dependencies:
             self.assertIn(dep, data["dependencies"])
             self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
+
+    def test_get_datapoints_by_filters(self):
+        headers = {
+            'Accept': 'application/json'
+        }
+
+        # Test the get_datapoints_by_filters with valid filters
+        filters = {"topic": "topic/of/dp_basis:002", "jsonpath": "$..data2"}
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json()[0]['topic'], filters['topic'])
+        self.assertEqual(response.json()[0]['jsonpath'], filters['jsonpath'])
+
+        # Test the get_datapoints_by_filters with no filters
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params={})
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+
+        # Test the get_datapoints_by_filters with nonexistent filters
+        filters = {"nonexistent": "value"}
+        response = requests.get(settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        print(response.json())
+        self.assertIsInstance(response.json(), list)
+
+        # Test the get_datapoints_by_filters with invalid filters
+        filters = {"topic": 123, "jsonpath": 456}
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json(), [])
