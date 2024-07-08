@@ -569,12 +569,6 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
     summary="Get the match status of a specific datapoint",
     description="Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.",
 )
-@app.get(
-    "/data/{object_id}/status",
-    response_model=bool,
-    summary="Get the match status of a specific datapoint",
-    description="Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.",
-)
 async def get_match_status(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
