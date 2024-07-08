@@ -1,3 +1,4 @@
+import importlib
 import json
 from typing import List, Optional
 from uuid import uuid4
@@ -605,6 +606,7 @@ async def check_orion():
     """
     Check whether the Orion Context Broker is running properly.
     """
+    start_time = time.time()
     try:
         async with aiohttp.ClientSession() as session:
             response = await session.get(f"{ORION_URL}/version")
@@ -622,6 +624,7 @@ async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
     """
+    start_time = time.time()
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
@@ -639,6 +642,7 @@ async def check_redis():
     """
     Check whether the Redis cache is running properly.
     """
+    start_time = time.time()
     try:
         await app.state.redis.ping()
         latency = (time.time() - start_time) * 1000
