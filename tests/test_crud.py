@@ -10,6 +10,7 @@ from backend.api.main import Datapoint, DatapointUpdate
 from test_settings import settings
 from tests.test_init import TestInit
 
+
 class TestCRUD(TestInit):
     """
     Test for data points CRUD
@@ -41,7 +42,6 @@ class TestCRUD(TestInit):
             **{
                 "topic": "topic/of/crud",
                 "jsonpath": "$..data2",
-                "connected": True,
                 "entity_id": "EntityID",
                 "entity_type": "EntityType",
                 "attribute_name": "AttributeName"
@@ -52,7 +52,7 @@ class TestCRUD(TestInit):
         object_id2 = response2.json()["object_id"]
         self.assertTrue(response2.ok)
 
-        # create not matched while checked connected flag
+        # create not matched with connected flag set to True, should fail
         datapoint3 = Datapoint(
             **{
                 "topic": "topic/of/crud",
@@ -69,7 +69,6 @@ class TestCRUD(TestInit):
             **{
                 "topic": "topic/of/crud",
                 "jsonpath": "$..data4",
-                "connected": False,
                 "entity_id": "EntityID",
                 "entity_type": "EntityType",
                 "attribute_name": "AttributeName"
@@ -91,7 +90,7 @@ class TestCRUD(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                         data=datapoint5.json())
+                                    data=datapoint5.json())
         object_id = response.json()["object_id"]
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
 
@@ -138,12 +137,13 @@ class TestCRUD(TestInit):
 
         object_id = self.unmatched_object_id
 
+        # Fetch the existing datapoint to use as a basis for updates
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         datapoint_basis = Datapoint(
             **json.loads(response.text)
         )
 
-        # update topic, should be rejected
+        # Attempt to update the topic and ensure it fails due to missing entity information
         datapoint_basis1 = datapoint_basis.copy()
         datapoint_basis1.topic = datapoint_basis1.topic + "/updated"
         datapoint_basis1.entity_id = None  # Ensure this triggers a failure
@@ -158,9 +158,12 @@ class TestCRUD(TestInit):
         print(f"Response1 status code: {response1.status_code}")
         print(f"Response1 content: {response1.text}")
 
+        # Ensure the response indicates failure
         self.assertFalse(response1.ok)
+        self.assertEqual(response1.status_code, 400)
+        self.assertIn("entity_id, entity_type, and attribute_name cannot be null", response1.text)
 
-        # connected
+        # Perform a valid update with correct entity information
         datapoint_basis_update = DatapointUpdate(
             entity_id=self.test_entity.id,
             entity_type=self.test_entity.type,
@@ -170,16 +173,26 @@ class TestCRUD(TestInit):
                                      data=datapoint_basis_update.json())
         self.assertTrue(response2.ok)
 
-        # check update result
+        # Verify the update result
         datapoint_basis2: Datapoint = datapoint_basis.copy()
         datapoint_basis2.entity_id = self.test_entity.id
         datapoint_basis2.entity_type = self.test_entity.type
         datapoint_basis2.attribute_name = self.test_entity.get_attribute_names().pop()
-        # datapoint_basis2.connected = True
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
+
+        updated_datapoint = Datapoint(**json.loads(response.text))
+
         self.assertEqual(
-            datapoint_basis2.dict().pop("connected"),
-            json.loads(response.text).pop("connected")
+            datapoint_basis2.entity_id,
+            updated_datapoint.entity_id
+        )
+        self.assertEqual(
+            datapoint_basis2.entity_type,
+            updated_datapoint.entity_type
+        )
+        self.assertEqual(
+            datapoint_basis2.attribute_name,
+            updated_datapoint.attribute_name
         )
 
     def test_match_datapoints(self):
@@ -349,7 +362,7 @@ class TestCRUD(TestInit):
         # verify the auto-generated object_id does not already exist
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
-    
+
     def test_partial_update_patch(self):
         headers = {
             'Accept': 'application/json'
