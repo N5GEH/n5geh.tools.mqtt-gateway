@@ -8,13 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, Extra, validator
 from redis import asyncio as aioredis
 import aiohttp
-
 import logging
 import re
 import time
-
-import sys
-sys.path.append('../../n5geh.tools.mqtt-gateway')
 from settings import settings
 
 app = FastAPI()
@@ -585,6 +581,7 @@ async def get_match_status(
         logging.info(f"Request URL: {url}")
         logging.info(f"Response status: {response.status}")
         return match_status
+
 
 async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
     """
