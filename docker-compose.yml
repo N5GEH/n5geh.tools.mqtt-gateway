@@ -11,9 +11,14 @@ services:
       - "5173:5173"
     networks:
       - default
-#    volumes:
+    volumes:
 #      - ./frontend:/dist  # for hot reloading
-    
+      - ./certs:/app/certs  # Mount the host's ./certs directory to /app/certs in the container
+    environment:
+      - CERT_KEY_PATH=/app/certs/mydev.key
+      - CERT_CERT_PATH=/app/certs/mydev.crt
+
+
   api:
     build:
       context: ./
