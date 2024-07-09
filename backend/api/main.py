@@ -591,20 +591,31 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
     and update the connected status accordingly.
     """
     row = await conn.fetchrow(
-        """SELECT entity_id, attribute_name FROM datapoints WHERE object_id=$1""", object_id
+        """SELECT entity_id, attribute_name, entity_type FROM datapoints WHERE object_id=$1""", object_id
     )
-    if row['entity_id'] and row['attribute_name']:
-        await conn.execute(
-            """UPDATE datapoints SET connected=$1 WHERE object_id=$2""",
-            True,
-            object_id,
-        )
+    if row['entity_id'] and row['attribute_name'] and row['entity_type']:
+        async with aiohttp.ClientSession() as session:
+            url = f"{settings.ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}?type={row['entity_type']}"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    await conn.execute(
+                        """UPDATE datapoints SET connected=$1 WHERE object_id=$2""",
+                        True,
+                        object_id,
+                    )
+                else:
+                    await conn.execute(
+                        """UPDATE datapoints SET connected=$1 WHERE object_id=$2""",
+                        False,
+                        object_id,
+                    )
     else:
         await conn.execute(
             """UPDATE datapoints SET connected=$1 WHERE object_id=$2""",
             False,
             object_id,
         )
+
 
 
 @app.get("/system/status",
