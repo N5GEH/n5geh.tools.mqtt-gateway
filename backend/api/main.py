@@ -617,7 +617,6 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
         )
 
 
-
 @app.get("/system/status",
     response_model=dict,
     summary="Get the status of the system",

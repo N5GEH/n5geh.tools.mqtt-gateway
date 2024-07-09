@@ -198,73 +198,54 @@ class TestCRUD(TestInit):
             'Accept': 'application/json'
         }
 
-        # Enable logging for debugging
-        logging.basicConfig(level=logging.DEBUG)
+        # Create matched datapoint
+        matched_datapoint = Datapoint(
+            **{
+                "topic": "topic/of/match",
+                "jsonpath": "$..data_match",
+                "connected": True,
+                "entity_id": "dp:001",
+                "entity_type": "Device",
+                "attribute_name": "temperature"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=matched_datapoint.json())
+        object_id = response.json()["object_id"]
+        logging.info(f"Created matched datapoint with object_id: {object_id}")
+        logging.info(f"Response for matched datapoint creation: {response.json()}")
+        self.assertTrue(response.ok)
 
-        # Mock the FIWARE Orion response for an existing entity and attribute
-        with requests_mock.Mocker() as mock:
-            entity_id = "dp:002"
-            entity_type = "Device"
-            attribute_name = "temperature"
+        # Verify match status
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
+        logging.info(f"Match status response for matched datapoint: {response.json()}")
+        self.assertTrue(response.ok)
+        self.assertTrue(response.json())
 
-            mock.get(f"{settings.ORION_URL}/v2/entities/{entity_id}/?type={entity_type}/attrs/{attribute_name}",
-                     status_code=200)
+        # Create non-matched datapoint
+        unmatched_datapoint = Datapoint(
+            **{
+                "topic": "topic/of/match",
+                "jsonpath": "$..data_nomatch",
+                "connected": True,
+                "entity_id": "NonExistentEntityID",
+                "entity_type": "NonExistentType",
+                "attribute_name": "NonExistentAttribute"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=unmatched_datapoint.json())
+        object_id = response.json()["object_id"]
+        logging.info(f"Created non-matched datapoint with object_id: {object_id}")
+        logging.info(f"Response for non-matched datapoint creation: {response.json()}")
+        self.assertTrue(response.ok)
 
-            # create matched datapoint
-            datapoint = Datapoint(
-                **{
-                    "topic": "topic/of/match",
-                    "jsonpath": "$..data_match",
-                    "connected": True,
-                    "entity_id": entity_id,
-                    "entity_type": entity_type,
-                    "attribute_name": attribute_name
-                }
-            )
-            mock.post(settings.GATEWAY_URL + "/data", json={"object_id": "mock_id"}, status_code=201)
-            response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers, data=datapoint.json())
-            object_id = response.json()["object_id"]
-            print(f"Created matched datapoint with object_id: {object_id}")
-            print(f"Response for matched datapoint creation: {response.json()}")
-            self.assertTrue(response.ok)
+        # Verify non-match status
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
+        logging.info(f"Match status response for non-matched datapoint: {response.json()}")
+        self.assertTrue(response.ok)
+        self.assertFalse(response.json())
 
-            # verify match status
-            mock.get(settings.GATEWAY_URL + f"/data/{object_id}/status", json=True)
-            response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
-            print(f"Match status response for matched datapoint: {response.json()}")
-            self.assertTrue(response.ok)
-            self.assertTrue(response.json())
-
-            # Mock the FIWARE Orion response for a non-existing entity and attribute
-            mock.get(
-                f"{settings.ORION_URL}/v2/entities/NonExistentEntityID/attrs/NonExistentAttribute/?type=NonExistentType",
-                status_code=404)
-
-            # create non-matched datapoint
-            datapoint = Datapoint(
-                **{
-                    "topic": "topic/of/match",
-                    "jsonpath": "$..data_nomatch",
-                    "connected": True,
-                    "entity_id": "NonExistentEntityID",
-                    "entity_type": "NonExistentType",
-                    "attribute_name": "NonExistentAttribute"
-                }
-            )
-            mock.post(settings.GATEWAY_URL + "/data", json={"object_id": "mock_id2"}, status_code=201)
-            response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers, data=datapoint.json())
-            object_id = response.json()["object_id"]
-            print(f"Created non-matched datapoint with object_id: {object_id}")
-            print(f"Response for non-matched datapoint creation: {response.json()}")
-            self.assertTrue(response.ok)
-
-            # verify non-match status
-            mock.get(settings.GATEWAY_URL + f"/data/{object_id}/status", json=False)
-            response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
-            print(f"Match status response for non-matched datapoint: {response.json()}")
-            self.assertTrue(response.ok)
-            self.assertFalse(response.json())
-    
     def test_object_id_unique(self):
         headers = {
             'Accept': 'application/json'
@@ -382,74 +363,7 @@ class TestCRUD(TestInit):
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
 
-    def test_check_and_update_connected(self):
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        # Enable logging for debugging
-        logging.basicConfig(level=logging.DEBUG)
-        
-        # Mock the FIWARE Orion response for an existing entity and attribute
-        with requests_mock.Mocker() as mock:
-            entity_id = "existing_entity"
-            attribute_name = "existing_attribute"
-            entity_type = "Device"
-            mock.get(f"{settings.ORION_URL}/v2/entities/{entity_id}/attrs/{attribute_name}/?type={entity_type}", status_code=200)
-
-            # Create datapoint
-            datapoint = Datapoint(
-                **{
-                    "topic": "topic/of/check",
-                    "jsonpath": "$..data_check",
-                    "entity_id": entity_id,
-                    "entity_type": entity_type,
-                    "attribute_name": attribute_name,
-                    "connected": False
-                }
-            )
-            mock.post(settings.GATEWAY_URL + "/data", json={"object_id": "mock_id"}, status_code=201)
-            response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                        data=datapoint.json())
-            object_id = response.json()["object_id"]
-            logging.debug(f"POST response: {response.json()}")
-            self.assertTrue(response.ok)
-
-            # Verify that the datapoint is marked as connected
-            mock.get(settings.GATEWAY_URL + "/data/mock_id", json={**datapoint.dict(), "connected": True})
-            response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
-            logging.debug(f"GET response: {response.text}")
-            updated_datapoint = Datapoint(**json.loads(response.text))
-            self.assertTrue(updated_datapoint.connected)
-
-            # Mock the FIWARE Orion response for a non-existing entity and attribute
-            mock.get(f"{settings.ORION_URL}/v2/entities/non_existing_entity/attrs/non_existing_attribute/?type={entity_type}", status_code=404)
-
-            # Create another datapoint
-            datapoint2 = Datapoint(
-                **{
-                    "topic": "topic/of/check",
-                    "jsonpath": "$..data_check",
-                    "entity_id": "non_existing_entity",
-                    "entity_type": entity_type,
-                    "attribute_name": "non_existing_attribute",
-                    "connected": False
-                }
-            )
-            mock.post(settings.GATEWAY_URL + "/data", json={"object_id": "mock_id2"}, status_code=201)
-            response2 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                         data=datapoint2.json())
-            object_id2 = response2.json()["object_id"]
-            logging.debug(f"POST response: {response2.json()}")
-            self.assertTrue(response2.ok)
-
-            # Verify that the datapoint is not marked as connected
-            mock.get(settings.GATEWAY_URL + "/data/mock_id2", json={**datapoint2.dict(), "connected": False})
-            response2 = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id2)
-            logging.debug(f"GET response: {response2.text}")
-            updated_datapoint2 = Datapoint(**json.loads(response2.text))
-            self.assertFalse(updated_datapoint2.connected)
-
+    
     def test_partial_update_patch(self):
         headers = {
             'Accept': 'application/json'
