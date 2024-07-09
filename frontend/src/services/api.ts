@@ -1,5 +1,5 @@
 // contain all the api calls to the backend
-let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+let API_URL = import.meta.env.VITE_API_URL || 'https://localhost:8000';
 
 export interface Datapoint {
     object_id?: string;
