@@ -288,6 +288,8 @@ async def add_datapoint(
                 stream_name,
                 {'subscribe': datapoint.topic},
             )
+        # Check if the datapoint can be connected
+        await check_and_update_connected(datapoint.object_id, conn)
 
         return {**datapoint.dict(), "subscribe": subscribed is None}
 
