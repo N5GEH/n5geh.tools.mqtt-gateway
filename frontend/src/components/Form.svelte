@@ -1,14 +1,14 @@
-<script lang="ts">
-  import { newDatapoint, data } from "../stores/stores"; // Import the data store
-  import type { Datapoint } from "../services/api";
-  import { addData } from "../services/api";
-  import { refreshData } from "../services/dataService";
+<script lang='ts'>
+  import { newDatapoint, data } from '../stores/stores'; // Import the data store
+  import type { Datapoint } from '../services/api';
+  import { addData } from '../services/api';
+  import { refreshData } from '../services/dataService';
 
   let formState: Partial<Datapoint> = {
     object_id: null,
-    jsonpath: "",
-    topic: "",
-    description: "",
+    jsonpath: '',
+    topic: '',
+    description: '',
     entity_id: null,
     entity_type: null,
     attribute_name: null,
@@ -26,16 +26,16 @@
       // Reset formState after successful addition
       formState = {
         object_id: null,
-        jsonpath: "",
-        topic: "",
-        description: "",
+        jsonpath: '',
+        topic: '',
+        description: '',
         entity_id: null,
         entity_type: null,
         attribute_name: null,
         connected: false
       };
     } catch (e) {
-      console.error("An error occurred while adding the data:", e);
+      console.error('An error occurred while adding the data:', e);
     }
   };
 </script>
