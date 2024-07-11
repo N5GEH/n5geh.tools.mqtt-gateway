@@ -1,5 +1,6 @@
-<script lang='ts'>
-  import { newDatapoint, data } from '../stores/stores'; // Import the data store
+<!-- Form.svelte -->
+<script lang="ts">
+  import { newDatapoint } from '../stores/stores';
   import type { Datapoint } from '../services/api';
   import { addData } from '../services/api';
   import { refreshData } from '../services/dataService';
