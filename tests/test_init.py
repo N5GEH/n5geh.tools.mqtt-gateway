@@ -1,9 +1,6 @@
 import unittest
 from filip.utils.cleanup import clear_context_broker
 from paho.mqtt.client import Client, MQTTv5
-import sys
-sys.path.append("../../n5geh.tools.mqtt-gateway")
-
 from backend.api.main import Datapoint
 from filip.clients.ngsi_v2.cb import ContextBrokerClient
 from filip.models.ngsi_v2.context import ContextEntity

@@ -3,9 +3,6 @@ import requests
 import sys
 import re
 import pydantic
-
-sys.path.append("../../n5geh.tools.mqtt-gateway")
-
 from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
