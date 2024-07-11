@@ -5,7 +5,6 @@ import pydantic
 from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
-import requests_mock
 import logging
 
 
