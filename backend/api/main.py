@@ -601,14 +601,18 @@ async def get_match_status(
         entity_id = row['entity_id']
         attribute_name = row['attribute_name']
         entity_type = row['entity_type']
+        fiware_service = row['fiware_service']
         url = f"{ORION_URL}/v2/entities/{entity_id}/attrs/{attribute_name}/?type={entity_type}"
-        response = await session.get(url)
-        match_status = response.status == 200
-        logging.info(f"Checking match status for entity_id: {entity_id}, attribute_name: {attribute_name}, entity_type: {entity_type}")
-        logging.info(f"Request URL: {url}")
-        logging.info(f"Response status: {response.status}")
-        return match_status
-
+        headers = {'fiware-service': fiware_service}
+        async with session.get(url, headers=headers) as response:
+            response_text = await response.text()
+            match_status = response.status == 200
+            logging.info(f"Checking match status for entity_id: {entity_id}, attribute_name: {attribute_name}, entity_type: {entity_type}, fiware_service: {fiware_service}")
+            logging.info(f"Request URL: {url}")
+            logging.info(f"Response status: {response.status}")
+            logging.info(f"Response text: {response_text}")
+            return match_status
+    
 
 async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
     """
@@ -618,7 +622,7 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
 
     # Fetch the entity_id, attribute_name, and entity_type from the datapoints table
     row = await conn.fetchrow(
-        """SELECT entity_id, attribute_name, entity_type FROM datapoints WHERE object_id=$1""", object_id
+         """SELECT entity_id, attribute_name, entity_type FROM datapoints WHERE object_id=$1""", object_id
     )
 
     # Check if entity_id, attribute_name, and entity_type are all present
