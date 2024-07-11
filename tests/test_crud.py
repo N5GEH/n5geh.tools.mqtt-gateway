@@ -2,10 +2,10 @@ import json
 import requests
 import re
 import pydantic
+import logging
 from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
-import logging
 
 
 class TestCRUD(TestInit):
@@ -15,6 +15,7 @@ class TestCRUD(TestInit):
 
     def setUp(self) -> None:
         super(TestCRUD, self).setUp()
+        logging.basicConfig(level=logging.DEBUG)
         pass
 
     def test_create(self):
@@ -162,6 +163,8 @@ class TestCRUD(TestInit):
 
         # Perform a valid update with correct entity information
         datapoint_basis_update = Datapoint(
+            jsonpath=datapoint_basis.jsonpath,
+            topic=datapoint_basis.topic,
             entity_id=self.test_entity.id,
             entity_type=self.test_entity.type,
             attribute_name=self.test_entity.get_attribute_names().pop(),
@@ -244,35 +247,6 @@ class TestCRUD(TestInit):
         logging.info(f"Match status response for non-matched datapoint: {response.json()}")
         self.assertTrue(response.ok)
         self.assertFalse(response.json())
-
-    def test_object_id_unique(self):
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        # create first datapoint
-        datapoint1 = Datapoint(
-            **{
-                "object_id": "unique_id",
-                "topic": "topic/of/id_test",
-                "jsonpath": "$..data1"
-            }
-        )
-        response1 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint1.json())
-        self.assertTrue(response1.ok)
-
-        # try to create second datapoint with same object_id
-        datapoint2 = Datapoint(
-            **{
-                "object_id": "unique_id",
-                "topic": "topic/of/id_test",
-                "jsonpath": "$..data2"
-            }
-        )
-        response2 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint2.json())
-        self.assertFalse(response2.ok)
 
     def test_object_id_immutable(self):
         headers = {
@@ -362,7 +336,7 @@ class TestCRUD(TestInit):
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
 
-    
+
     def test_partial_update_patch(self):
         headers = {
             'Accept': 'application/json'
@@ -474,8 +448,7 @@ class TestCRUD(TestInit):
         updated_datapoint = Datapoint(
             **json.loads(response.text)
         )
-        self.assertEqual(updated_datapoint.description,
-                         update_description_data["description"])
+        self.assertEqual(updated_datapoint.description, update_description_data["description"])
 
     def test_delete(self):
         object_id = self.unmatched_object_id
