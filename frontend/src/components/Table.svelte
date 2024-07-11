@@ -1,8 +1,8 @@
-<script lang='ts'>
-  import { onMount } from 'velte';
+<script lang="ts">
+  import { onMount } from 'svelte';
   import { updateData, deleteData } from '../services/api';
   import { data, currentlyEditing, tempData } from '../stores/stores';
-  import { refreshData } from "../services/dataService";
+  import { refreshData } from '../services/dataService';
 
   import type { Datapoint, DatapointUpdate } from '../services/api';
 
