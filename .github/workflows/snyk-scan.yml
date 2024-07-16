@@ -3,7 +3,7 @@ name: Snyk Container Scan
 on:
   push:
     branches:
-      - <your-branch-name>  # Replace with your branch name
+      - main
   pull_request:
     branches:
       - main
@@ -17,6 +17,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Set up Docker Buildx
+
       uses: docker/setup-buildx-action@v2
 
     - name: Build API image
@@ -32,6 +33,7 @@ jobs:
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-api:latest'
+
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
