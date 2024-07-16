@@ -1,0 +1,53 @@
+name: Snyk Container Scan
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  snyk:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Build and scan API image
+      run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ././backend/api/Dockerfile .
+
+    - name: Build and scan Frontend image
+      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f ././frontend/Dockerfile .
+
+    - name: Build and scan Gateway image
+      run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ././backend/gateway/Dockerfile .
+    
+    - name: Snyk Scan API image
+      uses: snyk/actions/docker@master
+      with:
+        image: 'api:latest'
+        args: '--severity-threshold=high'
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: Snyk Scan Frontend image
+      uses: snyk/actions/docker@master
+      with:
+        image: 'frontend:latest'
+        args: '--severity-threshold=high'
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: Snyk Scan Gateway image
+      uses: snyk/actions/docker@master
+      with:
+        image: 'gateway:latest'
+        args: '--severity-threshold=high'
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
