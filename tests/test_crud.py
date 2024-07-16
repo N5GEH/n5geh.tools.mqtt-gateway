@@ -1,11 +1,12 @@
 import json
 import requests
-import sys
 import re
 import pydantic
+import logging
 from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
+import importlib
 
 
 class TestCRUD(TestInit):
@@ -15,6 +16,7 @@ class TestCRUD(TestInit):
 
     def setUp(self) -> None:
         super(TestCRUD, self).setUp()
+        logging.basicConfig(level=logging.DEBUG)
         pass
 
     def test_create(self):
@@ -508,3 +510,57 @@ class TestCRUD(TestInit):
         self.assertTrue(response.ok)
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertFalse(response.ok)
+
+    def test_get_status(self):
+        response = requests.request("GET", settings.GATEWAY_URL+"/system/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("overall_status", data)
+        self.assertIn("checks", data)
+        self.assertIn("orion", data["checks"])
+        self.assertIn("postgres", data["checks"])
+        self.assertIn("redis", data["checks"])
+        # Check if overall_status is "healthy"
+        self.assertEqual(data["overall_status"], "healthy")
+
+    def test_get_version_info(self):
+        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("application_version", data)
+        self.assertIn("dependencies", data)
+        dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+        for dep in dependencies:
+            self.assertIn(dep, data["dependencies"])
+            self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
+
+    def test_get_datapoints_by_filters(self):
+        headers = {
+            'Accept': 'application/json'
+        }
+
+        # Test the get_datapoints_by_filters with valid filters
+        filters = {"topic": "topic/of/dp_basis:002", "jsonpath": "$..data2"}
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json()[0]['topic'], filters['topic'])
+        self.assertEqual(response.json()[0]['jsonpath'], filters['jsonpath'])
+
+        # Test the get_datapoints_by_filters with no filters
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params={})
+        self.assertTrue(response.ok)
+        self.assertIsInstance(response.json(), list)
+
+        # Test the get_datapoints_by_filters with nonexistent filters
+        filters = {"nonexistent": "value"}
+        response = requests.get(settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        print(response.json())
+        self.assertIsInstance(response.json(), list)
+
+        # Test the get_datapoints_by_filters with invalid filters
+        filters = {"topic": 123, "jsonpath": 456}
+        response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params=filters)
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json(), [])
