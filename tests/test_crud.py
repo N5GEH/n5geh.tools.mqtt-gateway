@@ -564,3 +564,40 @@ class TestCRUD(TestInit):
         response = requests.request("GET", settings.GATEWAY_URL + "/data", headers=headers, params=filters)
         self.assertTrue(response.ok)
         self.assertEqual(response.json(), [])
+
+        def test_create_default_fiware_service(self):
+        headers = {
+            'Accept': 'application/json',
+            'fiware-service': settings.FIWARE_SERVICE
+        }
+
+        # Create datapoint without specifying fiware_service
+        datapoint = Datapoint(
+            **{
+                "topic": "topic/of/default",
+                "jsonpath": "$..data_default"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=datapoint.json())
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json()["fiware_service"], settings.FIWARE_SERVICE)
+
+    def test_create_custom_fiware_service(self):
+        headers = {
+            'Accept': 'application/json',
+            'fiware-service': 'custom_service'
+        }
+
+        # Create datapoint with custom fiware_service
+        datapoint = Datapoint(
+            **{
+                "topic": "topic/of/custom",
+                "jsonpath": "$..data_custom",
+                "fiware_service": "custom_service"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=datapoint.json())
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json()["fiware_service"], "custom_service")
