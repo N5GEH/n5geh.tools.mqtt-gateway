@@ -13,14 +13,20 @@
     entity_id: null,
     entity_type: null,
     attribute_name: null,
-    connected: false
+    connected: false,
+    fiware_service: '',
   };
+
+  let isMultiTenancy = false; // New state for multi-tenancy checkbox
 
   // Reactive statement that updates whenever formState changes
   $: newDatapoint.set(formState as Datapoint);
 
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
+    if (!isMultiTenancy) {
+      formState.fiware_service = ''; // Clear fiware_service if multi-tenancy is not enabled
+    }
     try {
       await addData($newDatapoint);
       await refreshData(); // Refresh the data after adding a new datapoint
@@ -33,8 +39,10 @@
         entity_id: null,
         entity_type: null,
         attribute_name: null,
-        connected: false
+        connected: false,
+        fiware_service: '',
       };
+      isMultiTenancy = false; // Reset the multi-tenancy checkbox
     } catch (e) {
       console.error('An error occurred while adding the data:', e);
     }
@@ -53,6 +61,18 @@
   <input type="text" id="topic" bind:value={formState.topic} required />
   <label for="description">Description</label>
   <input type="text" id="description" bind:value={formState.description} />
+
+  <!-- Multi-Tenancy Checkbox -->
+  <div class="multi-tenancy">
+    <label for="multiTenancy">Multi Tenancy</label>
+    <input type="checkbox" id="multiTenancy" bind:checked={isMultiTenancy} />
+  </div>
+  
+  {#if isMultiTenancy}
+    <label for="fiware_service">FIWARE Service</label>
+    <input type="text" id="fiware_service" bind:value={formState.fiware_service} required />
+  {/if}
+
   <div class="connected">
     <label for="connected">Match Datapoint</label>
     <input type="checkbox" id="connected" bind:checked={formState.connected} />
@@ -80,5 +100,6 @@
       required
     />
   {/if}
+  
   <button type="submit">Add Datapoint</button>
 </form>
