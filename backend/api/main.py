@@ -1,3 +1,4 @@
+import importlib
 import json
 from typing import List, Optional, Dict
 from uuid import uuid4
@@ -13,6 +14,8 @@ import re
 import time
 from settings import settings
 
+
+__version__ = "0.2.0"
 app = FastAPI()
 # enable CORS for the frontend
 app.add_middleware(
@@ -586,7 +589,9 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
     "/data/{object_id}/status",
     response_model=bool,
     summary="Get the match status of a specific datapoint",
-    description="Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.",
+    description="Get the match status of a specific datapoint. This is to allow the "
+                "frontend to check whether a datapoint is matched to an existing "
+                "entity/attribute pair in the Context Broker.",
 )
 async def get_match_status(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
@@ -674,51 +679,94 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
 @app.get("/system/status",
     response_model=dict,
     summary="Get the status of the system",
-    description="Get the status of the system. This is to allow the frontend to check whether the system is running properly.",
+    description="Get the status of the system. This is to allow the frontend to check "
+                "whether the system is running properly.",
 )
 async def get_status():
-    system_status = {
+    checks = {
         "orion": await check_orion(),
         "postgres": await check_postgres(),
         "redis": await check_redis(),
     }
+
+    overall_status = "healthy" if all(check["status"] for check in checks.values()) else "unhealthy"
+
+    system_status = {
+        "overall_status": overall_status,
+        "checks": checks,
+    }
     return system_status
+
+@app.get("/system/version",
+         response_model=dict,
+         summary="Get the version of the system and the dependencies",
+         description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
+)
+async def get_version_info():
+    """
+    Return version information for the application and its dependencies.
+    """
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+    def get_dependency_version(package: str):
+        """
+        Get the version of a package.
+        """
+        return importlib.metadata.version(package)
+    version_results = [get_dependency_version(dep) for dep in dependencies]
+    version_info = {
+        "application_version": __version__,
+        "dependencies": dict(zip(dependencies, version_results))
+    }
+    return version_info
 
 async def check_orion():
     """
     Check whether the Orion Context Broker is running properly.
     """
+    start_time = time.time()
     try:
         async with aiohttp.ClientSession() as session:
             response = await session.get(f"{ORION_URL}/version")
-            return response.status == 200
+            status = response.status == 200
+            latency = (time.time() - start_time)*1000
+            return {"status": status, "latency": latency, "latency_unit": "ms",
+                    "message": None if status else "Failed to connect"}
     except Exception as e:
+        latency = time.time() - start_time
         logging.error(f"Error checking Orion: {e}")
-        return False
-
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
     """
+    start_time = time.time()
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
-            return True
+            latency = (time.time() - start_time)*1000
+            return {"status": True, "latency": latency,
+                    "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking PostgreSQL: {e}")
-        return False
-
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 async def check_redis():
     """
     Check whether the Redis cache is running properly.
     """
+    start_time = time.time()
     try:
         await app.state.redis.ping()
-        return True
+        latency = (time.time() - start_time)*1000
+        return {"status": True, "latency": latency,
+                "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking Redis: {e}")
-        return False
-
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
                 log_level=settings.LOG_LEVEL.lower())
