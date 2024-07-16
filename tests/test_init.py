@@ -1,4 +1,3 @@
-import importlib
 import unittest
 from filip.utils.cleanup import clear_context_broker
 from paho.mqtt.client import Client, MQTTv5
@@ -37,6 +36,16 @@ class TestInit(unittest.TestCase):
         self.cbc = ContextBrokerClient(fiware_header=self.fiware_header,
                                        url=settings.ORION_URL)
         self.cbc.post_entity(entity=self.test_entity)
+
+        # Create a new entity and attribute to ensure they exist
+        attr2 = {'temperature': {'value': 0,
+                                 'type': 'Number'}}
+        self.test_entity_for_match = ContextEntity(
+            id="dp:001",
+            type="Device",
+            **attr2
+        )
+        self.cbc.post_entity(entity=self.test_entity_for_match)
 
         # create basis data points
         self.unmatched_datapoint = Datapoint(
