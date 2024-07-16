@@ -360,13 +360,13 @@ async def add_datapoint(
 
 @app.put(
     "/data/{object_id}",
-    response_model=DatapointUpdate,
+    response_model=Datapoint,
     summary="Update a specific datapoint in the gateway",
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
     object_id: str,
-    datapoint: DatapointUpdate,
+    datapoint: Datapoint,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
@@ -374,7 +374,7 @@ async def update_datapoint(
 
     Args:
         object_id (str): The object_id of the datapoint to be updated.
-        datapoint (DatapointUpdate): The updated datapoint.
+        datapoint (Datapoint): The updated datapoint.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
