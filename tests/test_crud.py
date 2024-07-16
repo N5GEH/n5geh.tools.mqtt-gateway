@@ -257,7 +257,7 @@ class TestCRUD(TestInit):
         self.assertTrue(response.ok)
 
         # Verify entity creation in Context Broker
-        cb_headers = {'Accept': 'application/json', 'fiware-service': 'default_service'}
+        cb_headers = {'Accept': 'application/json', 'fiware-service': settings.FIWARE_SERVICE}
         cb_url = f"{settings.ORION_URL}/v2/entities/dp:001"
         cb_response = requests.get(cb_url, headers=cb_headers)
         print(f"Context Broker entity creation check URL: {cb_url}")
