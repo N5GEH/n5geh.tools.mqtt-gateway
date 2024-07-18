@@ -8,6 +8,12 @@ ENV PYTHONUNBUFFERED 1
 # Set working directory
 WORKDIR /app
 
+# Install required packages, including PostgreSQL client
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements.txt
 COPY ./backend/gateway/requirements.txt ./
 

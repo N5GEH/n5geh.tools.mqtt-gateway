@@ -46,7 +46,9 @@ class TestInit(unittest.TestCase):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.unmatched_datapoint.json())
+                                    data=self.unmatched_datapoint.json(),
+                                    verify=False
+                                    )
         self.unmatched_object_id = response.json()["object_id"]
 
         self.matched_datapoint = Datapoint(
@@ -60,7 +62,9 @@ class TestInit(unittest.TestCase):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint.json())
+                                    data=self.matched_datapoint.json(),
+                                    verify=False
+                                    )
         self.matched_object_id = response.json()["object_id"]
 
         # initialize MQTT client
@@ -73,11 +77,11 @@ class TestInit(unittest.TestCase):
     def clean_up(self):
         clear_context_broker(fiware_header=self.fiware_header,
                              url=settings.ORION_URL)
-        response = requests.request("DELETE", settings.GATEWAY_URL+"/data")
+        response = requests.request("DELETE", settings.GATEWAY_URL+"/data", verify=False)
 
     def health_check(self):
         # health check, if not accessible give warning
-        response = requests.request("GET", settings.GATEWAY_URL+"/data")
+        response = requests.request("GET", settings.GATEWAY_URL+"/data", verify=False)
         if not response.ok:
             response.raise_for_status()
 

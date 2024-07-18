@@ -5,6 +5,7 @@ This module implements the MQTT IoT Gateway.
 import asyncio
 import json
 import ssl
+import time
 from typing import List, Tuple
 
 import aiohttp
@@ -17,6 +18,7 @@ from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
 from settings import settings
+import os
 import logging
 
 # Load configuration from JSON file
@@ -33,12 +35,20 @@ REDIS_URL = settings.REDIS_URL
 orion_url = settings.ORION_URL
 service = settings.FIWARE_SERVICE
 service_path = settings.FIWARE_SERVICEPATH
+use_auth = settings.USE_OAUTH
+token_url = settings.TOKEN_URL
+client_id = settings.CLIENT_ID
+client_secret = settings.CLIENT_SECRET
 
 host = settings.POSTGRES_HOST
 user = settings.POSTGRES_USER
 password = settings.POSTGRES_PASSWORD
 database = settings.POSTGRES_DB
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
+
+# SSL certificate and key paths
+CERTFILE = os.getenv('CERTFILE', '/app/certs/mydev.crt')
+KEYFILE = os.getenv('KEYFILE', '/app/certs/mydev.key')
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL.upper(),
@@ -69,6 +79,18 @@ class MqttGateway(Client):
             url=f"{REDIS_URL}/1"
         )  # Redis Stream for notifying the API about new datapoints
         self.conn = None  # Initialized in run()
+        self.access_token = None
+        self.token_expires_in = None
+        self.token_acquired_at = None
+        self.ssl_context = None
+
+    async def create_ssl_context(self, certfile, keyfile):
+        loop = asyncio.get_running_loop()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+        await loop.run_in_executor(None, context.load_cert_chain, certfile, keyfile)
+
+        return context
 
     async def mqtt_worker(self) -> None:
         async with aiohttp.ClientSession() as worker_session:
@@ -142,6 +164,21 @@ class MqttGateway(Client):
         Args:
             message (Tuple[str, str, Client]): A tuple containing the topic, the payload, and the MQTT client used by the gateway.
         """
+        logging.info(
+            f"Processing MQTT message for topic: {topic} with message: {message}")
+        if use_auth:
+            await self.refresh_token_if_needed()
+            headers = {
+                "fiware-service": service,
+                "fiware-servicepath": service_path,
+                "Authorization": f"Bearer {self.access_token}"
+            }
+        else:
+            headers = {
+                "fiware-service": service,
+                "fiware-servicepath": service_path,
+            }
+
         # Get all datapoints for the topic from the cache
         # If the topic is not in the cache, ask Postgres
         if not await self.cache.hlen(topic):
@@ -175,14 +212,14 @@ class MqttGateway(Client):
                 }
                 # Send the payload to the Orion Context Broker
                 try:
+                    logging.info(
+                        f"Sending payload {payload} to Orion Context Broker for topic {topic}")
+                    logging.info(f"Headers: {headers}")
                     await session.patch(
                         url=f"{orion_url}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
-                        # TODO support other headers
-                        headers={
-                            "fiware-service": service,
-                            "fiware-servicepath": service_path,
-                        },
+                        headers=headers,
+                        ssl=self.ssl_context
                     )
                     logging.info(f"Sent {payload} to Orion Context Broker")
                 except Exception as e:
@@ -289,7 +326,13 @@ class MqttGateway(Client):
         """
         await self.cache.flushdb()
         self.conn = await asyncpg.connect(DATABASE_URL)
-        self.s = aiohttp.ClientSession()
+
+        # Create SSL context for aiohttp using the provided cert and key files
+        self.ssl_context = None if not settings.USE_SSL_FOR_ORION else await self.create_ssl_context(
+            CERTFILE, KEYFILE)
+
+        self.s = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(ssl=self.ssl_context))
         while True:
             reconnect_interval = 5
             try:
@@ -300,7 +343,7 @@ class MqttGateway(Client):
                         port=MQTT_PORT,
                         username=MQTT_USER,
                         password=MQTT_PASSWORD,
-                        tls_context=tls_context
+                        tls_context=self.ssl_context
                 ) as client:  # only where the mqtt client is connected
                     tasks = [
                         # mqtt listener put the coming mqtt messages to mqtt_queue
@@ -318,6 +361,27 @@ class MqttGateway(Client):
                     f"MQTT error: {error} - reconnecting in {reconnect_interval} seconds"
                 )
                 await asyncio.sleep(reconnect_interval)
+
+    # async def get_access_token(self):
+    #     async with aiohttp.ClientSession() as session:
+    #         data = {
+    #             'grant_type': 'client_credentials',
+    #             'client_id': client_id,
+    #             'client_secret': client_secret,
+    #         }
+    #         async with session.post(token_url, data=data) as response:
+    #             token_response = await response.json()
+    #             return token_response['access_token'], token_response['expires_in']
+
+    async def refresh_token_if_needed(self):
+        if use_auth and (not self.access_token or
+                         (time.time() - self.token_acquired_at) >= self.token_expires_in):
+            self.access_token, self.token_expires_in = await self.get_mock_access_token()
+            self.token_acquired_at = time.time()
+            logging.info(f"Acquired new access token: {self.access_token}")
+
+    async def get_mock_access_token(self):
+        return "mock_access_token", 3600
 
 
 if __name__ == "__main__":

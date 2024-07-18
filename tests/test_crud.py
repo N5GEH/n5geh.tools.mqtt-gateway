@@ -5,8 +5,6 @@ from test_settings import settings
 from tests.test_init import TestInit
 import importlib
 
-crt_path = "../certs/mydev.crt"
-
 class TestCRUD(TestInit):
     """
     Test for data points CRUD
@@ -28,8 +26,11 @@ class TestCRUD(TestInit):
                 "jsonpath": "$..data1"
             }
         )
-        response1 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint1.json(), verify=False)
+        response1 = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                     headers=headers,
+                                     data=datapoint1.json(),
+                                     verify=False
+                                     )
         object_id1 = response1.json()["object_id"]
         self.assertTrue(response1.ok)
 
@@ -44,8 +45,11 @@ class TestCRUD(TestInit):
                 "attribute_name": "AttributeName"
             }
         )
-        response2 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint2.json(), verify=False)
+        response2 = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                     headers=headers,
+                                     data=datapoint2.json(),
+                                     verify=False
+                                     )
         object_id2 = response2.json()["object_id"]
         self.assertTrue(response2.ok)
 
@@ -57,8 +61,11 @@ class TestCRUD(TestInit):
                 "matchDatapoint": True
             }
         )
-        response3 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint3.json(), verify=False)
+        response3 = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                     headers=headers,
+                                     data=datapoint3.json(),
+                                     verify=False
+                                     )
         self.assertFalse(response3.ok)
 
         # create matched DP while left match flag unchecked
@@ -72,8 +79,11 @@ class TestCRUD(TestInit):
                 "attribute_name": "AttributeName"
             }
         )
-        response4 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint4.json(), verify=False)
+        response4 = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                     headers=headers,
+                                     data=datapoint4.json(),
+                                     verify=False
+                                     )
         object_id4 = response4.json()["object_id"]
         self.assertTrue(response4.ok)
 
@@ -87,10 +97,15 @@ class TestCRUD(TestInit):
                 "jsonpath": "$..dat5"
             }
         )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                         data=datapoint5.json(), verify=False)
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=datapoint5.json(),
+                                    verify=False
+                                    )
         object_id = response.json()["object_id"]
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
 
         self.assertEqual(
             datapoint5.json(include={"topic", "jsonpath"}),
@@ -120,12 +135,16 @@ class TestCRUD(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint6.json(), verify=False)
+                                    headers=headers,
+                                    data=datapoint6.json(),
+                                    verify=False)
         object_id_6 = response.json()["object_id"]
 
         # create duplicated dp with data dp 6
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint6.json(), verify=False)
+                                    headers=headers,
+                                    data=datapoint6.json(),
+                                    verify=False)
         self.assertTrue(response.ok)
 
     def test_update_put(self):
@@ -133,7 +152,9 @@ class TestCRUD(TestInit):
             'Accept': 'application/json'
         }
         object_id = self.unmatched_object_id
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
         datapoint_basis = Datapoint(
             **json.loads(response.text)
         )
@@ -152,7 +173,9 @@ class TestCRUD(TestInit):
         self.assertEqual(response1.status_code, 422)  # 422 is for validation error
 
         # check if topic and json_path are unchanged
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
         updated_datapoint = Datapoint(
             **json.loads(response.text)
         )
@@ -180,7 +203,9 @@ class TestCRUD(TestInit):
         datapoint_basis2.entity_type = self.test_entity.type
         datapoint_basis2.attribute_name = self.test_entity.get_attribute_names().pop()
         # datapoint_basis2.matchDatapoint = True
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
         self.assertEqual(
             datapoint_basis2.dict().pop("matchDatapoint"),
             json.loads(response.text).pop("matchDatapoint")
@@ -188,13 +213,19 @@ class TestCRUD(TestInit):
 
     def test_delete(self):
         object_id = self.unmatched_object_id
-        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
         self.assertTrue(response.ok)
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id, verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
         self.assertFalse(response.ok)
 
     def test_get_status(self):
-        response = requests.request("GET", settings.GATEWAY_URL+"/system/status", verify=False)
+        response = requests.request("GET", settings.GATEWAY_URL+"/system/status",
+                                    verify=False
+                                    )
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("overall_status", data)
@@ -206,7 +237,9 @@ class TestCRUD(TestInit):
         self.assertEqual(data["overall_status"], "healthy")
 
     def test_get_version_info(self):
-        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version", verify=False)
+        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version",
+                                               verify=False
+                                               )
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("application_version", data)

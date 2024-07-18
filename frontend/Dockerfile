@@ -15,12 +15,6 @@ RUN npm install -g vite
 # Debug
 # CMD ["sh", "-c", "while true; do sleep 3600; done"]
 
-# Copy the rest of the application files
-COPY . .
-
-# Build the application without certificate dependencies
-RUN npm run build
-
 # Runner script here
 RUN chmod +x ./runner.sh
 CMD ["./runner.sh"]

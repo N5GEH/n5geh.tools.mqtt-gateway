@@ -47,7 +47,9 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint2.json())
+                                    data=self.matched_datapoint2.json(),
+                                    verify=False
+                                    )
         self.value_3 = round(random.random(), 4)
         self.payload_dict3 = {
             "level1": {
@@ -88,7 +90,9 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint_arm.json())
+                                    data=self.matched_datapoint_arm.json(),
+                                    verify=False
+                                    )
 
     def test_plain_payload(self):
         # plain payload
@@ -157,14 +161,19 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_1.json())
+                                    headers=headers, data=datapoint_duplicated_1.json(),
+                                    verify=False
+                                    )
         object_id_1 = response.json()["object_id"]
 
         # create duplicated point 2
         datapoint_duplicated_2 = datapoint_duplicated_1.copy()
         datapoint_duplicated_2.attribute_name = "attr2"
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_2.json())
+                                    headers=headers,
+                                    data=datapoint_duplicated_2.json(),
+                                    verify=False
+                                    )
         object_id_2 = response.json()["object_id"]
 
         # publish data
@@ -392,7 +401,9 @@ class TestForwarding(TestInit):
         self.payload_dict1["data1"] = value_new
 
         object_id = self.matched_object_id
-        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id)
+        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id,
+                                    verify=False
+                                    )
 
         self.mqttc.publish(
             topic=self.matched_datapoint.topic,
