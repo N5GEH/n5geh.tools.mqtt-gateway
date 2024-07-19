@@ -6,7 +6,7 @@ on:
       - 20-security-scan-of-the-image
   pull_request:
     branches:
-      - 20-security-scan-of-the-image
+      - main
 
 jobs:
   snyk:
@@ -14,10 +14,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v3  # Using the latest version
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v3  # Using the latest version
 
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
