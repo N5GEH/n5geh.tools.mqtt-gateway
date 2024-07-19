@@ -6,7 +6,7 @@ on:
       - 20-security-scan-of-the-image
   pull_request:
     branches:
-      - main
+      - 20-security-scan-of-the-image
 
 jobs:
   snyk:
