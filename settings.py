@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     FIWARE_SERVICEPATH: str = "/"
     # Get log level from environment variable, default to INFO if not set
     LOG_LEVEL: str = 'INFO'  # 'critical', 'error', 'warning', 'info', 'debug'
-    USE_OAUTH: bool = os.getenv('USE_OAUTH', 'False').lower() in ('true', '1', 't')
-    CLIENT_ID: str = os.getenv('CLIENT_ID', '')
-    CLIENT_SECRET: str = os.getenv('CLIENT_SECRET', '')
-    TOKEN_URL: str = os.getenv('TOKEN_URL', '')
-    USE_SSL_FOR_ORION: bool = Field(default=False)
+    USE_OAUTH: bool = os.getenv("USE_OAUTH", "False").lower() in ("true", "1", "t")
+    CLIENT_ID: str = os.getenv("CLIENT_ID", "")
+    CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "")
+    TOKEN_URL: str = os.getenv("TOKEN_URL", "")
+    USE_SSL_FOR_ORION: bool = os.getenv("USE_SSL_FOR_ORION").lower() in ("true", "1", "t")
 
     class Config:
         env_file = ".env"
