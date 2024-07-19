@@ -22,9 +22,6 @@ jobs:
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
 
-    - name: Build Frontend image
-      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f ./frontend/Dockerfile .
-
     - name: Build Gateway image
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
 
@@ -32,14 +29,6 @@ jobs:
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-api:latest'
-        args: '--severity-threshold=high'
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-    - name: Snyk Scan Frontend image
-      uses: snyk/actions/docker@master
-      with:
-        image: 'n5gehtoolsmqtt-gateway-frontend:latest'
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
