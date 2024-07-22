@@ -22,9 +22,6 @@ jobs:
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
 
-    - name: Build Frontend image
-      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f /frontend/Dockerfile .
-
     - name: Build Gateway image
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
 
@@ -62,21 +59,6 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     
-    - name: Parse and create GitHub issues for Frontend image vulnerabilities
-      if: steps.snyk-frontend.outputs.snyk-result != ''
-      run: |
-        echo "${{ steps.snyk-frontend.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
-          if [[ $line == *"severity"* ]]; then
-            severity=$(echo $line | awk '{print $3}')
-          elif [[ $line == *"Description"* ]]; then
-            description=$(echo $line | awk '{print $2}')
-          elif [[ $line == *"Info"* ]]; then
-            info=$(echo $line | awk '{print $2}')
-            gh issue create --title "$severity vulnerability found in Frontend image" --body "Description: $description\nInfo: $info"
-          fi
-        done
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Snyk Scan Gateway image
       id: snyk-gateway
