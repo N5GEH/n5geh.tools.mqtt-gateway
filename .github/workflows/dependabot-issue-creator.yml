@@ -5,7 +5,9 @@ on:
     types:
       - opened
       - synchronize
-  workflow_dispatch:
+  push:
+    branches:
+      - 30-setup-dependabot-workflow
 
 jobs:
   create_issue:
@@ -26,6 +28,12 @@ jobs:
                 title: 'Simulated Dependency Update',
                 html_url: 'https://github.com/N5GEH/n5geh.tools.mqtt-gateway/pull/1',
                 number: 1
+              };
+            } else if (eventName === 'push') {
+              pr = {
+                title: 'Push to Main Branch',
+                html_url: context.payload.compare,
+                number: context.runId
               };
             } else {
               pr = context.payload.pull_request;
