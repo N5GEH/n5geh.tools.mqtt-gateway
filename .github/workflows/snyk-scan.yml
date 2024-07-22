@@ -1,4 +1,4 @@
-name: Snyk Container Scan
+name: Snyk Container Scan and Create Issues
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - 20-security-scan-of-the-image
   pull_request:
     branches:
-      - 20-security-scan-of-the-image
+      - main
 
 jobs:
   snyk:
@@ -14,29 +14,91 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3  # Using the latest version
+      uses: actions/checkout@v3
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3  # Using the latest version
+      uses: docker/setup-buildx-action@v3
 
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
+
+    - name: Build Frontend image
+      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f ./frontend/Dockerfile .
 
     - name: Build Gateway image
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
 
     - name: Snyk Scan API image
+      id: snyk-api
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-api:latest'
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    
+    - name: Parse and create GitHub issues for API image vulnerabilities
+      if: steps.snyk-api.outputs.snyk-result != ''
+      run: |
+        echo "${{ steps.snyk-api.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+          if [[ $line == *"severity"* ]]; then
+            severity=$(echo $line | awk '{print $3}')
+          elif [[ $line == *"Description"* ]]; then
+            description=$(echo $line | awk '{print $2}')
+          elif [[ $line == *"Info"* ]]; then
+            info=$(echo $line | awk '{print $2}')
+            gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
+          fi
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Snyk Scan Frontend image
+      id: snyk-frontend
+      uses: snyk/actions/docker@master
+      with:
+        image: 'n5gehtoolsmqtt-gateway-frontend:latest'
+        args: '--severity-threshold=high'
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    
+    - name: Parse and create GitHub issues for Frontend image vulnerabilities
+      if: steps.snyk-frontend.outputs.snyk-result != ''
+      run: |
+        echo "${{ steps.snyk-frontend.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+          if [[ $line == *"severity"* ]]; then
+            severity=$(echo $line | awk '{print $3}')
+          elif [[ $line == *"Description"* ]]; then
+            description=$(echo $line | awk '{print $2}')
+          elif [[ $line == *"Info"* ]]; then
+            info=$(echo $line | awk '{print $2}')
+            gh issue create --title "$severity vulnerability found in Frontend image" --body "Description: $description\nInfo: $info"
+          fi
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Snyk Scan Gateway image
+      id: snyk-gateway
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-gateway:latest'
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: Parse and create GitHub issues for Gateway image vulnerabilities
+      if: steps.snyk-gateway.outputs.snyk-result != ''
+      run: |
+        echo "${{ steps.snyk-gateway.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+          if [[ $line == *"severity"* ]]; then
+            severity=$(echo $line | awk '{print $3}')
+          elif [[ $line == *"Description"* ]]; then
+            description=$(echo $line | awk '{print $2}')
+          elif [[ $line == *"Info"* ]]; then
+            info=$(echo $line | awk '{print $2}')
+            gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
+          fi
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
