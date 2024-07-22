@@ -33,6 +33,7 @@ jobs:
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
 
     - name: Snyk Scan Gateway image
       id: snyk-gateway
@@ -42,35 +43,44 @@ jobs:
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
 
     - name: Parse and create GitHub issues for API image vulnerabilities
-      if: success() && steps.snyk-api.outputs.snyk-result != ''
+      if: always()
       run: |
-        echo "${{ steps.snyk-api.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
-          if [[ $line == *"severity"* ]]; then
-            severity=$(echo $line | awk '{print $3}')
-          elif [[ $line == *"Description"* ]]; then
-            description=$(echo $line | awk '{print $2}')
-          elif [[ $line == *"Info"* ]]; then
-            info=$(echo $line | awk '{print $2}')
-            gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
-          fi
-        done
+        echo "Parsing Snyk API scan results..."
+        echo "${{ steps.snyk-api.outputs.snyk-result }}"
+        if [ -n "${{ steps.snyk-api.outputs.snyk-result }}" ]; then
+          echo "${{ steps.snyk-api.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+            if [[ $line == *"severity"* ]]; then
+              severity=$(echo $line | awk '{print $3}')
+            elif [[ $line == *"Description"* ]]; then
+              description=$(echo $line | awk '{print $2}')
+            elif [[ $line == *"Info"* ]]; then
+              info=$(echo $line | awk '{print $2}')
+              gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
+            fi
+          done
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Parse and create GitHub issues for Gateway image vulnerabilities
-      if: success() && steps.snyk-gateway.outputs.snyk-result != ''
+      if: always()
       run: |
-        echo "${{ steps.snyk-gateway.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
-          if [[ $line == *"severity"* ]]; then
-            severity=$(echo $line | awk '{print $3}')
-          elif [[ $line == *"Description"* ]]; then
-            description=$(echo $line | awk '{print $2}')
-          elif [[ $line == *"Info"* ]]; then
-            info=$(echo $line | awk '{print $2}')
-            gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
-          fi
-        done
+        echo "Parsing Snyk Gateway scan results..."
+        echo "${{ steps.snyk-gateway.outputs.snyk-result }}"
+        if [ -n "${{ steps.snyk-gateway.outputs.snyk-result }}" ]; then
+          echo "${{ steps.snyk-gateway.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+            if [[ $line == *"severity"* ]]; then
+              severity=$(echo $line | awk '{print $3}')
+            elif [[ $line == *"Description"* ]]; then
+              description=$(echo $line | awk '{print $2}')
+            elif [[ $line == *"Info"* ]]; then
+              info=$(echo $line | awk '{print $2}')
+              gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
+            fi
+          done
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
