@@ -3,7 +3,7 @@ name: Check for Security Alerts
 on:
   push:
     branches:
-      - 30-setup-dependabot-workflow  # Triggers the workflow on push to the main branch
+      - main  # Triggers the workflow on push to the main branch
   schedule:
     - cron: '0 0 * * 0'  # Optionally, also run weekly at midnight on Sunday
   workflow_dispatch:  # Allows manual triggering of the workflow
@@ -21,6 +21,7 @@ jobs:
           curl -H "Accept: application/vnd.github.v3+json" \
                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                https://api.github.com/repos/${{ github.repository }}/dependabot/alerts > alerts.json
+          cat alerts.json  # Print the JSON response for debugging
 
       - name: Parse and Create Issues
         id: create_issues
@@ -30,6 +31,12 @@ jobs:
           script: |
             const fs = require('fs');
             const alerts = JSON.parse(fs.readFileSync('alerts.json', 'utf8'));
+            console.log('Fetched alerts:', alerts);  // Debugging output
+
+            if (!Array.isArray(alerts)) {
+              console.log('No alerts found or response is not an array.');
+              return;
+            }
 
             for (const alert of alerts) {
               const vulnerability = alert.security_advisory;
