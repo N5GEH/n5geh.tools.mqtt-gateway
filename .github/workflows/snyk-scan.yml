@@ -45,6 +45,10 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
+    - name: Install Snyk CLI
+      run: npm install -g snyk
+      continue-on-error: true
+
     - name: Parse and create GitHub issues for API image vulnerabilities
       if: always()
       run: |
