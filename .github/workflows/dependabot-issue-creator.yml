@@ -32,12 +32,12 @@ jobs:
             console.log('Creating issue with title:', issueTitle);
             console.log('Creating issue with body:', issueBody);
 
-            const { data: issue } = await github.issues.create({
+            const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
               body: issueBody
             });
 
-            console.log('Issue created:', issue.html_url);
-            core.setOutput('issue_url', issue.html_url);
+            console.log('Issue created:', issue.data.html_url);
+            core.setOutput('issue_url', issue.data.html_url);
