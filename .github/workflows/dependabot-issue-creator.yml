@@ -5,6 +5,7 @@ on:
     types:
       - opened
       - synchronize
+  workflow_dispatch:
 
 jobs:
   create_issue:
@@ -12,13 +13,24 @@ jobs:
     steps:
       - name: Debug event
         run: echo "${{ toJson(github.event) }}"
-      
+
       - name: Create issue
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const pr = context.payload.pull_request;
+            const eventName = context.eventName;
+            let pr;
+            if (eventName === 'workflow_dispatch') {
+              pr = {
+                title: 'Simulated Dependency Update',
+                html_url: 'https://github.com/N5GEH/n5geh.tools.mqtt-gateway/pull/1',
+                number: 1
+              };
+            } else {
+              pr = context.payload.pull_request;
+            }
+
             if (!pr) {
               core.setFailed('No pull request found in context payload.');
               return;
