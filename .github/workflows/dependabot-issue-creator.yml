@@ -1,0 +1,29 @@
+name: Dependabot Issue Creator
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  create_issue:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Create issue
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const { title, html_url, number } = pr;
+            const issueTitle = `Dependency update: ${title}`;
+            const issueBody = `A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.`;
+            const { data: issue } = await github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody
+            });
+            core.setOutput('issue_url', issue.html_url);
