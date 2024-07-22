@@ -23,14 +23,28 @@ jobs:
                https://api.github.com/repos/${{ github.repository }}/pulls?state=open&labels=dependencies > open_prs.json
           cat open_prs.json  # Print the JSON response for debugging
 
-      - name: Create Issues for Open Dependabot PRs
+      - name: Parse and Create Issues
         id: create_issues
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const prs = JSON.parse(fs.readFileSync('open_prs.json', 'utf8'));
+            let prs;
+
+            try {
+              prs = JSON.parse(fs.readFileSync('open_prs.json', 'utf8'));
+            } catch (error) {
+              console.error('Error parsing JSON:', error);
+              core.setFailed('Failed to parse JSON response from GitHub API.');
+              return;
+            }
+
+            if (!Array.isArray(prs) || prs.length === 0) {
+              console.log('No open Dependabot pull requests found.');
+              return;
+            }
+
             console.log('Fetched open PRs:', prs);  // Debugging output
 
             for (const pr of prs) {
