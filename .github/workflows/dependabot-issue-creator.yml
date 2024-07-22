@@ -1,9 +1,10 @@
 name: Dependabot Issue Creator
 
 on:
-  push:
-    branches:
-      - 30-setup-dependabot-workflow  # Optional: Triggers the workflow on push to the branch
+  pull_request:
+    types:
+      - opened
+      - synchronize
 
 jobs:
   create_issue:
