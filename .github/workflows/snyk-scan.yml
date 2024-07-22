@@ -3,7 +3,7 @@ name: Snyk Container Scan
 on:
   push:
     branches:
-      - 20-security-scan-of-the-image
+      - main
   pull_request:
     branches:
       - main
