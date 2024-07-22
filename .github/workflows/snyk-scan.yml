@@ -53,7 +53,8 @@ jobs:
       if: always()
       run: |
         echo "Parsing Snyk API scan results..."
-        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high)
+        export PATH=$PATH:/home/runner/.npm-global/bin
+        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high 2>&1)
         echo "$snyk_output"
         echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
           echo "Processing line: $line"
@@ -76,7 +77,8 @@ jobs:
       if: always()
       run: |
         echo "Parsing Snyk Gateway scan results..."
-        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high)
+        export PATH=$PATH:/home/runner/.npm-global/bin
+        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high 2>&1)
         echo "$snyk_output"
         echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
           echo "Processing line: $line"
