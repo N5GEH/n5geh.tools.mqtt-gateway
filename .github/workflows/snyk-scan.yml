@@ -54,22 +54,28 @@ jobs:
       run: |
         echo "Parsing Snyk API scan results..."
         export PATH=$PATH:/home/runner/.npm-global/bin
+        snyk --version
         snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high 2>&1)
+        echo "Snyk output:"
         echo "$snyk_output"
-        echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
-          echo "Processing line: $line"
-          if [[ $line == *"severity"* ]]; then
-            severity=$(echo $line | awk '{print $3}')
-            echo "Severity: $severity"
-          elif [[ $line == *"Description"* ]]; then
-            description=$(echo $line | awk '{print $2}')
-            echo "Description: $description"
-          elif [[ $line == *"Info"* ]]; then
-            info=$(echo $line | awk '{print $2}')
-            echo "Info: $info"
-            gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
-          fi
-        done
+        if [ -n "$snyk_output" ]; then
+          echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
+            echo "Processing line: $line"
+            if [[ $line == *"severity"* ]]; then
+              severity=$(echo $line | awk '{print $3}')
+              echo "Severity: $severity"
+            elif [[ $line == *"Description"* ]]; then
+              description=$(echo $line | awk '{print $2}')
+              echo "Description: $description"
+            elif [[ $line == *"Info"* ]]; then
+              info=$(echo $line | awk '{print $2}')
+              echo "Info: $info"
+              gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
+            fi
+          done
+        else
+          echo "No Snyk API scan results found."
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -78,21 +84,27 @@ jobs:
       run: |
         echo "Parsing Snyk Gateway scan results..."
         export PATH=$PATH:/home/runner/.npm-global/bin
+        snyk --version
         snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high 2>&1)
+        echo "Snyk output:"
         echo "$snyk_output"
-        echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
-          echo "Processing line: $line"
-          if [[ $line == *"severity"* ]]; then
-            severity=$(echo $line | awk '{print $3}')
-            echo "Severity: $severity"
-          elif [[ $line == *"Description"* ]]; then
-            description=$(echo $line | awk '{print $2}')
-            echo "Description: $description"
-          elif [[ $line == *"Info"* ]]; then
-            info=$(echo $line | awk '{print $2}')
-            echo "Info: $info"
-            gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
-          fi
-        done
+        if [ -n "$snyk_output" ]; then
+          echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
+            echo "Processing line: $line"
+            if [[ $line == *"severity"* ]]; then
+              severity=$(echo $line | awk '{print $3}')
+              echo "Severity: $severity"
+            elif [[ $line == *"Description"* ]]; then
+              description=$(echo $line | awk '{print $2}')
+              echo "Description: $description"
+            elif [[ $line == *"Info"* ]]; then
+              info=$(echo $line | awk '{print $2}')
+              echo "Info: $info"
+              gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
+            fi
+          done
+        else
+          echo "No Snyk Gateway scan results found."
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
