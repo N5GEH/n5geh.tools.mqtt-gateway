@@ -5,9 +5,6 @@ on:
     types:
       - opened
       - synchronize
-  push:
-    branches:
-      - 30-setup-dependabot-workflow
 
 jobs:
   create_issue:
@@ -15,30 +12,13 @@ jobs:
     steps:
       - name: Debug event
         run: echo "${{ toJson(github.event) }}"
-
+      
       - name: Create issue
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const eventName = context.eventName;
-            let pr;
-            if (eventName === 'workflow_dispatch') {
-              pr = {
-                title: 'Simulated Dependency Update',
-                html_url: 'https://github.com/N5GEH/n5geh.tools.mqtt-gateway/pull/1',
-                number: 1
-              };
-            } else if (eventName === 'push') {
-              pr = {
-                title: 'Push to Main Branch',
-                html_url: context.payload.compare,
-                number: context.runId
-              };
-            } else {
-              pr = context.payload.pull_request;
-            }
-
+            const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed('No pull request found in context payload.');
               return;
@@ -46,8 +26,8 @@ jobs:
             console.log('Pull Request:', pr);
 
             const { title, html_url, number } = pr;
-            const issueTitle = `Dependency update: ${title}`;
-            const issueBody = `A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.`;
+            const issueTitle = Dependency update: ${title};
+            const issueBody = A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.;
 
             console.log('Creating issue with title:', issueTitle);
             console.log('Creating issue with body:', issueBody);
