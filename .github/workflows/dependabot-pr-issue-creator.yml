@@ -1,0 +1,66 @@
+name: Dependabot PR Issue Creator
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Runs weekly at midnight on Sunday
+  workflow_dispatch:  # Allows manual triggering of the workflow
+
+jobs:
+  create_issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+
+      - name: Fetch Open Dependabot PRs
+        id: fetch_prs
+        run: |
+          curl -H "Accept: application/vnd.github.v3+json" \
+               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               https://api.github.com/repos/${{ github.repository }}/pulls?state=open&labels=dependencies > open_prs.json
+          cat open_prs.json  # Print the JSON response for debugging
+
+      - name: Create Issues for Open Dependabot PRs
+        id: create_issues
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const prs = JSON.parse(fs.readFileSync('open_prs.json', 'utf8'));
+            console.log('Fetched open PRs:', prs);  // Debugging output
+
+            for (const pr of prs) {
+              const issueTitle = `Dependency Update: ${pr.title}`;
+              const issueBody = `
+                **Pull Request:** [#${pr.number}](${pr.html_url})\n
+                **Title:** ${pr.title}\n
+                **Created At:** ${pr.created_at}\n
+                **Updated At:** ${pr.updated_at}\n
+                **Author:** ${pr.user.login}\n
+                \n
+                A new dependency update PR has been created. Please review and merge if appropriate.
+              `;
+
+              // Check if an issue already exists with the same title
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open'
+              });
+
+              const issueExists = issues.data.some(issue => issue.title === issueTitle);
+
+              if (!issueExists) {
+                const { data: issue } = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issueTitle,
+                  body: issueBody
+                });
+
+                console.log(`Issue created: ${issue.html_url}`);
+              } else {
+                console.log(`Issue already exists: ${issueTitle}`);
+              }
+            }
