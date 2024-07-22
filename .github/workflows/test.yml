@@ -28,7 +28,7 @@ jobs:
     - name: Install Snyk CLI
       run: npm install -g snyk
 
-    - name: Run Snyk to check API Docker image for vulnerabilities
+      - name: Run Snyk to check API Docker image for vulnerabilities
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -39,12 +39,6 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
         snyk container test n5gehtoolsmqtt-gateway-gateway:latest --json > snyk-gateway-report.json || true
-
-    - name: Display API Snyk Report
-      run: cat snyk-api-report.json
-
-    - name: Display Gateway Snyk Report
-      run: cat snyk-gateway-report.json
 
     - name: Filter high and critical vulnerabilities for API image
       run: |
@@ -72,6 +66,21 @@ jobs:
       if: steps.api_vuln_check.outputs.has_vulnerabilities > 0
       uses: JasonEtco/create-an-issue@v2
       with:
+        title: "High/Critical Vulnerabilities Found in API Docker Image"
+        body: |
+          **High/Critical Vulnerabilities Found in API Docker Image**
+          The following high/critical vulnerabilities were found in the API Docker image:
+
+          ```json
+          ${{ steps.api_vuln_check.outputs.has_vulnerabilities }}
+          ```
+
+          **Details:**
+          ```json
+          ${{ steps.api_vuln_check.outputs.has_vulnerabilities | fromJson | .vulnerabilities | map(.title, .description, .severity, .identifiers) }}
+          ```
+
+          Please review and address these vulnerabilities as soon as possible.
         filename: snyk-api-high-critical-report.json
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,6 +89,21 @@ jobs:
       if: steps.gateway_vuln_check.outputs.has_vulnerabilities > 0
       uses: JasonEtco/create-an-issue@v2
       with:
+        title: "High/Critical Vulnerabilities Found in Gateway Docker Image"
+        body: |
+          **High/Critical Vulnerabilities Found in Gateway Docker Image**
+          The following high/critical vulnerabilities were found in the Gateway Docker image:
+
+          ```json
+          ${{ steps.gateway_vuln_check.outputs.has_vulnerabilities }}
+          ```
+
+          **Details:**
+          ```json
+          ${{ steps.gateway_vuln_check.outputs.has_vulnerabilities | fromJson | .vulnerabilities | map(.title, .description, .severity, .identifiers) }}
+          ```
+
+          Please review and address these vulnerabilities as soon as possible.
         filename: snyk-gateway-high-critical-report.json
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
