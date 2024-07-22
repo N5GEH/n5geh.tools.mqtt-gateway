@@ -1,7 +1,9 @@
 name: Check for Security Alerts
 
 on:
-
+  push:
+    branches:
+      - 30-setup-dependabot-workflow  # Triggers the workflow on push to the branch
   schedule:
     - cron: '0 0 * * *'  # Optionally, also run weekly at midnight on Sunday
   workflow_dispatch:  # Allows manual triggering of the workflow
