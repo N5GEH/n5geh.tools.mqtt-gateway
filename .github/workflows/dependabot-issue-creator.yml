@@ -10,19 +10,34 @@ jobs:
   create_issue:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug event
+        run: echo "${{ toJson(github.event) }}"
+      
       - name: Create issue
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed('No pull request found in context payload.');
+              return;
+            }
+            console.log('Pull Request:', pr);
+
             const { title, html_url, number } = pr;
             const issueTitle = `Dependency update: ${title}`;
             const issueBody = `A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.`;
+
+            console.log('Creating issue with title:', issueTitle);
+            console.log('Creating issue with body:', issueBody);
+
             const { data: issue } = await github.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
               body: issueBody
             });
+
+            console.log('Issue created:', issue.html_url);
             core.setOutput('issue_url', issue.html_url);
