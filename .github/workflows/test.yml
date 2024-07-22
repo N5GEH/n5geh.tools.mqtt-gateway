@@ -14,16 +14,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      uses: docker/setup-buildx-action@v3
 
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
@@ -37,12 +31,20 @@ jobs:
     - name: Run Snyk to check API Docker image for vulnerabilities
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      run: snyk container test n5gehtoolsmqtt-gateway-api:latest --json > snyk-api-report.json
+      run: |
+        snyk container test n5gehtoolsmqtt-gateway-api:latest --json > snyk-api-report.json || true
 
     - name: Run Snyk to check Gateway Docker image for vulnerabilities
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      run: snyk container test n5gehtoolsmqtt-gateway-gateway:latest --json > snyk-gateway-report.json
+      run: |
+        snyk container test n5gehtoolsmqtt-gateway-gateway:latest --json > snyk-gateway-report.json || true
+
+    - name: Display API Snyk Report
+      run: cat snyk-api-report.json
+
+    - name: Display Gateway Snyk Report
+      run: cat snyk-gateway-report.json
 
     - name: Filter high and critical vulnerabilities for API image
       run: |
