@@ -18,10 +18,18 @@ jobs:
       - name: Fetch Open Dependabot PRs
         id: fetch_prs
         run: |
-          curl -H "Accept: application/vnd.github.v3+json" \
-               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               https://api.github.com/repos/${{ github.repository }}/pulls?state=open&labels=dependencies > open_prs.json
+          response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+                             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                             https://api.github.com/repos/${{ github.repository }}/pulls?state=open&labels=dependencies)
+          echo "$response" > open_prs.json
           cat open_prs.json  # Print the JSON response for debugging
+          status=$(echo "$response" | jq -r '.message')
+          if [[ "$status" == "null" ]]; then
+            echo "API request successful"
+          else
+            echo "API request failed with message: $status"
+            exit 1
+          fi
 
       - name: Parse and Create Issues
         id: create_issues
