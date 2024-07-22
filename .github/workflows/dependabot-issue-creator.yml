@@ -9,7 +9,6 @@ on:
 jobs:
   create_issue:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
     steps:
       - name: Create issue
         uses: actions/github-script@v5
