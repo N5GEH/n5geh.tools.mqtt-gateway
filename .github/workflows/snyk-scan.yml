@@ -1,4 +1,4 @@
-name: Snyk Container Scan and Create Issues
+name: Snyk Container Scan
 
 on:
   push:
@@ -26,93 +26,49 @@ jobs:
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
 
     - name: Snyk Scan API image
-      id: snyk-api
+      id: snyk_api
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-api:latest'
-        args: '--severity-threshold=high'
+        args: '--severity-threshold=high --json-file-output=snyk-api-results.json'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
     - name: Snyk Scan Gateway image
-      id: snyk-gateway
+      id: snyk_gateway
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-gateway:latest'
-        args: '--severity-threshold=high'
+        args: '--severity-threshold=high --json-file-output=snyk-gateway-results.json'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
-    - name: Install Snyk CLI
-      run: npm install -g snyk
-      continue-on-error: true
+    - name: Upload Snyk Results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: snyk-results
+        path: |
+          snyk-api-results.json
+          snyk-gateway-results.json
 
-    - name: Parse and create GitHub issues for API image vulnerabilities
+    - name: Create GitHub Issues for Vulnerabilities
       if: always()
       run: |
-        echo "Parsing Snyk API scan results..."
-        export PATH=$PATH:/home/runner/.npm-global/bin
-        snyk --version
-        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high 2>&1)
-        snyk_exit_code=$?
-        echo "Snyk output:"
-        echo "$snyk_output"
-        if [ $snyk_exit_code -ne 0 ]; then
-          echo "Snyk scan failed with exit code $snyk_exit_code"
-        fi
-        if [ -n "$snyk_output" ]; then
-          echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
-            echo "Processing line: $line"
-            if [[ $line == *"severity"* ]]; then
-              severity=$(echo $line | awk '{print $3}')
-              echo "Severity: $severity"
-            elif [[ $line == *"Description"* ]]; then
-              description=$(echo $line | awk '{print $2}')
-              echo "Description: $description"
-            elif [[ $line == *"Info"* ]]; then
-              info=$(echo $line | awk '{print $2}')
-              echo "Info: $info"
-              gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
-            fi
-          done
-        else
-          echo "No Snyk API scan results found."
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Parse and create GitHub issues for Gateway image vulnerabilities
-      if: always()
-      run: |
-        echo "Parsing Snyk Gateway scan results..."
-        export PATH=$PATH:/home/runner/.npm-global/bin
-        snyk --version
-        snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high 2>&1)
-        snyk_exit_code=$?
-        echo "Snyk output:"
-        echo "$snyk_output"
-        if [ $snyk_exit_code -ne 0 ]; then
-          echo "Snyk scan failed with exit code $snyk_exit_code"
-        fi
-        if [ -n "$snyk_output" ]; then
-          echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
-            echo "Processing line: $line"
-            if [[ $line == *"severity"* ]]; then
-              severity=$(echo $line | awk '{print $3}')
-              echo "Severity: $severity"
-            elif [[ $line == *"Description"* ]]; then
-              description=$(echo $line | awk '{print $2}')
-              echo "Description: $description"
-            elif [[ $line == *"Info"* ]]; then
-              info=$(echo $line | awk '{print $2}')
-              echo "Info: $info"
-              gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
-            fi
-          done
-        else
-          echo "No Snyk Gateway scan results found."
-        fi
+        for file in snyk-api-results.json snyk-gateway-results.json; do
+          if [ -f "$file" ]; then
+            vulnerabilities=$(jq -r '.vulnerabilities[] | @base64' $file)
+            for vulnerability in $vulnerabilities; do
+              _jq() {
+               echo ${vulnerability} | base64 --decode | jq -r ${1}
+              }
+              title="SNYK: $(_jq '.title')"
+              description="## Description\n$(_jq '.description')\n\n## Info\n$(_jq '.url')\n\n## Severity\n$(_jq '.severity')\n\n## Introduced through\n$(_jq '.from | join(", ")')\n\n## Remediation\n$(_jq '.remediation')"
+              gh issue create --title "$title" --body "$description" --label "security"
+            done
+          fi
+        done
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
