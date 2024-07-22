@@ -19,12 +19,6 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
     - name: Build API Docker image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
 
@@ -37,6 +31,7 @@ jobs:
       with:
         image: n5gehtoolsmqtt-gateway-api:latest
         args: --severity-threshold=high
+      continue-on-error: true
 
     - name: Snyk Scan Gateway image
       id: snyk-gateway
@@ -44,15 +39,13 @@ jobs:
       with:
         image: n5gehtoolsmqtt-gateway-gateway:latest
         args: --severity-threshold=high
+      continue-on-error: true
 
     - name: Parse and create GitHub issues for API image vulnerabilities
-      if: ${{ steps.snyk-api.outputs.vulnerabilities }}
       run: |
         echo "Parsing Snyk API scan results..."
-        severity=""
-        description=""
-        info=""
-        echo "${{ steps.snyk-api.outputs.vulnerabilities }}" | while read -r line; do
+        echo "${{ steps.snyk-api.outputs.vulnerabilities }}" | grep -A 3 -B 1 'severity' | while read -r line; do
+          echo "Processing line: $line"
           if [[ $line == *"severity"* ]]; then
             severity=$(echo $line | awk '{print $3}')
           elif [[ $line == *"Description"* ]]; then
@@ -66,13 +59,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Parse and create GitHub issues for Gateway image vulnerabilities
-      if: ${{ steps.snyk-gateway.outputs.vulnerabilities }}
       run: |
         echo "Parsing Snyk Gateway scan results..."
-        severity=""
-        description=""
-        info=""
-        echo "${{ steps.snyk-gateway.outputs.vulnerabilities }}" | while read -r line; do
+        echo "${{ steps.snyk-gateway.outputs.vulnerabilities }}" | grep -A 3 -B 1 'severity' | while read -r line; do
+          echo "Processing line: $line"
           if [[ $line == *"severity"* ]]; then
             severity=$(echo $line | awk '{print $3}')
           elif [[ $line == *"Description"* ]]; then
