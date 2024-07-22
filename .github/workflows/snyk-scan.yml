@@ -65,16 +65,23 @@ jobs:
       run: |
         for file in snyk-api-results.json snyk-gateway-results.json; do
           if [ -f "$file" ]; then
-            vulnerabilities=$(jq -r '.vulnerabilities[] | @base64' $file)
+            vulnerabilities=$(jq -r '.vulnerabilities[] | select(.severity == "high" or .severity == "critical") | @base64' $file)
             for vulnerability in $vulnerabilities; do
               _jq() {
                 echo "${vulnerability}" | base64 --decode | jq -r ${1}
               }
               title="SNYK: $(_jq '.title')"
               description="## Description\n$(_jq '.description')\n\n## Info\n$(_jq '.url')\n\n## Severity\n$(_jq '.severity')\n\n## Introduced through\n$(_jq '.from | join(", ")')\n\n## Remediation\n$(_jq '.remediation')"
-              echo "Creating issue: ${title}"
-              echo "Description: ${description}"
-              gh issue create --title "$title" --body "$description" --label "security" || echo "Failed to create issue: ${title}"
+              
+              # Check if issue already exists
+              existing_issue=$(gh issue list -R yourusername/yourrepository --search "$title" --json number --jq '.[].number')
+              if [ -z "$existing_issue" ]; then
+                echo "Creating issue: ${title}"
+                echo "Description: ${description}"
+                gh issue create --title "$title" --body "$description" --label "security" || echo "Failed to create issue: ${title}"
+              else
+                echo "Issue already exists: ${title}"
+              fi
             done
           else
             echo "File not found: ${file}"
