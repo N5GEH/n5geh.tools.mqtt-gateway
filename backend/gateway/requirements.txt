@@ -1,4 +1,4 @@
-aiohttp==3.8.4
+aiohttp==3.9.4
 aiologger==0.7.0
 async_timeout==4.0.2
 asyncio-mqtt==0.16.1
