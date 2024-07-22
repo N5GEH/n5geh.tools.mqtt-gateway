@@ -33,9 +33,18 @@ jobs:
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-    
+
+    - name: Snyk Scan Gateway image
+      id: snyk-gateway
+      uses: snyk/actions/docker@master
+      with:
+        image: 'n5gehtoolsmqtt-gateway-gateway:latest'
+        args: '--severity-threshold=high'
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
     - name: Parse and create GitHub issues for API image vulnerabilities
-      if: steps.snyk-api.outputs.snyk-result != ''
+      if: success() && steps.snyk-api.outputs.snyk-result != ''
       run: |
         echo "${{ steps.snyk-api.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
           if [[ $line == *"severity"* ]]; then
@@ -50,27 +59,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Snyk Scan Frontend image
-      id: snyk-frontend
-      uses: snyk/actions/docker@master
-      with:
-        image: 'n5gehtoolsmqtt-gateway-frontend:latest'
-        args: '--severity-threshold=high'
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-    
-
-    - name: Snyk Scan Gateway image
-      id: snyk-gateway
-      uses: snyk/actions/docker@master
-      with:
-        image: 'n5gehtoolsmqtt-gateway-gateway:latest'
-        args: '--severity-threshold=high'
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
     - name: Parse and create GitHub issues for Gateway image vulnerabilities
-      if: steps.snyk-gateway.outputs.snyk-result != ''
+      if: success() && steps.snyk-gateway.outputs.snyk-result != ''
       run: |
         echo "${{ steps.snyk-gateway.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
           if [[ $line == *"severity"* ]]; then
