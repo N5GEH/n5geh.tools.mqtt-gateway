@@ -3,7 +3,7 @@ name: Check for Security Alerts
 on:
 
   schedule:
-    - cron: '0 0 * * 0'  # Optionally, also run weekly at midnight on Sunday
+    - cron: '0 0 * * *'  # Optionally, also run weekly at midnight on Sunday
   workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
