@@ -45,6 +45,9 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
+    - name: List Files in Workspace
+      run: ls -al
+
     - name: Upload Snyk Results
       if: always()
       uses: actions/upload-artifact@v2
@@ -59,6 +62,7 @@ jobs:
       run: |
         for file in snyk-api-results.json snyk-gateway-results.json; do
           if [ -f "$file" ]; then
+            echo "Found $file"
             vulnerabilities=$(jq -r '.vulnerabilities[] | @base64' $file)
             for vulnerability in $vulnerabilities; do
               _jq() {
@@ -66,8 +70,11 @@ jobs:
               }
               title="SNYK: $(_jq '.title')"
               description="## Description\n$(_jq '.description')\n\n## Info\n$(_jq '.url')\n\n## Severity\n$(_jq '.severity')\n\n## Introduced through\n$(_jq '.from | join(", ")')\n\n## Remediation\n$(_jq '.remediation')"
+              echo "Creating issue: $title"
               gh issue create --title "$title" --body "$description" --label "security"
             done
+          else
+            echo "File $file not found"
           fi
         done
       env:
