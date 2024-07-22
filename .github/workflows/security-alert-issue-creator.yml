@@ -1,0 +1,37 @@
+name: Security Alert Issue Creator
+
+on:
+  repository_vulnerability_alert:
+    types: [created]
+
+jobs:
+  create_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const alert = context.payload.alert;
+            const vulnerability = alert.security_advisory;
+            
+            const issueTitle = `Security Alert: ${vulnerability.summary}`;
+            const issueBody = `
+              **Severity:** ${vulnerability.severity}\n
+              **Description:** ${vulnerability.description}\n
+              **Affected Package:** ${alert.affected_package_name}\n
+              **Affected Versions:** ${alert.affected_range}\n
+              **More Info:** [${vulnerability.html_url}](${vulnerability.html_url})\n
+              
+              A new security vulnerability has been detected. Please review and take necessary actions to update the affected package.
+            `;
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody
+            });
+
+            core.setOutput('issue_url', issue.html_url);
