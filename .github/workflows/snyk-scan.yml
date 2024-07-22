@@ -45,6 +45,9 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
+    - name: Print Working Directory
+      run: pwd
+
     - name: List Files in Workspace
       run: ls -al
 
