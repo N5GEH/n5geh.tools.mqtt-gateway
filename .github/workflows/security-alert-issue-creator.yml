@@ -1,37 +1,68 @@
-name: Security Alert Issue Creator
+name: Check for Security Alerts
 
 on:
-  repository_vulnerability_alert:
-    types: [created]
+  push:
+    branches:
+      - 30-setup-dependabot-workflow  # Triggers the workflow on push to the main branch
+  schedule:
+    - cron: '0 0 * * 0'  # Optionally, also run weekly at midnight on Sunday
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
-  create_issue:
+  check_alerts:
     runs-on: ubuntu-latest
     steps:
-      - name: Create issue
+      - name: Check out the repository
+        uses: actions/checkout@v2
+
+      - name: Fetch Security Alerts
+        id: fetch_alerts
+        run: |
+          curl -H "Accept: application/vnd.github.v3+json" \
+               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               https://api.github.com/repos/${{ github.repository }}/dependabot/alerts > alerts.json
+
+      - name: Parse and Create Issues
+        id: create_issues
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const alert = context.payload.alert;
-            const vulnerability = alert.security_advisory;
-            
-            const issueTitle = `Security Alert: ${vulnerability.summary}`;
-            const issueBody = `
-              **Severity:** ${vulnerability.severity}\n
-              **Description:** ${vulnerability.description}\n
-              **Affected Package:** ${alert.affected_package_name}\n
-              **Affected Versions:** ${alert.affected_range}\n
-              **More Info:** [${vulnerability.html_url}](${vulnerability.html_url})\n
-              
-              A new security vulnerability has been detected. Please review and take necessary actions to update the affected package.
-            `;
+            const fs = require('fs');
+            const alerts = JSON.parse(fs.readFileSync('alerts.json', 'utf8'));
 
-            const { data: issue } = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: issueTitle,
-              body: issueBody
-            });
+            for (const alert of alerts) {
+              const vulnerability = alert.security_advisory;
+              const issueTitle = `Security Alert: ${vulnerability.summary}`;
+              const issueBody = `
+                **Severity:** ${vulnerability.severity}\n
+                **Description:** ${vulnerability.description}\n
+                **Affected Package:** ${alert.affected_package_name}\n
+                **Affected Versions:** ${alert.affected_range}\n
+                **More Info:** [${vulnerability.html_url}](${vulnerability.html_url})\n
+                
+                A new security vulnerability has been detected. Please review and take necessary actions to update the affected package.
+              `;
 
-            core.setOutput('issue_url', issue.html_url);
+              // Check if an issue already exists with the same title
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open'
+              });
+
+              const issueExists = issues.data.some(issue => issue.title === issueTitle);
+
+              if (!issueExists) {
+                const { data: issue } = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issueTitle,
+                  body: issueBody
+                });
+
+                console.log(`Issue created: ${issue.html_url}`);
+              } else {
+                console.log(`Issue already exists: ${issueTitle}`);
+              }
+            }
