@@ -30,13 +30,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            let prs;
-
+            let prsContent;
             try {
-              prs = JSON.parse(fs.readFileSync('open_prs.json', 'utf8'));
+              prsContent = fs.readFileSync('open_prs.json', 'utf8');
+              console.log('Raw PRs JSON content:', prsContent);
+              prs = JSON.parse(prsContent);
             } catch (error) {
-              console.error('Error parsing JSON:', error);
-              core.setFailed('Failed to parse JSON response from GitHub API.');
+              console.error('Error reading or parsing JSON:', error);
+              core.setFailed('Failed to read or parse JSON response from GitHub API.');
               return;
             }
 
