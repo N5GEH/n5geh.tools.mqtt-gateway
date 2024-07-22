@@ -23,7 +23,7 @@ jobs:
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
 
     - name: Build Frontend image
-      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f ./frontend/Dockerfile .
+      run: docker build -t n5gehtoolsmqtt-gateway-frontend:latest -f /frontend/Dockerfile .
 
     - name: Build Gateway image
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
