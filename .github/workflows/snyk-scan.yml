@@ -56,8 +56,12 @@ jobs:
         export PATH=$PATH:/home/runner/.npm-global/bin
         snyk --version
         snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high 2>&1)
+        snyk_exit_code=$?
         echo "Snyk output:"
         echo "$snyk_output"
+        if [ $snyk_exit_code -ne 0 ]; then
+          echo "Snyk scan failed with exit code $snyk_exit_code"
+        fi
         if [ -n "$snyk_output" ]; then
           echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
             echo "Processing line: $line"
@@ -86,8 +90,12 @@ jobs:
         export PATH=$PATH:/home/runner/.npm-global/bin
         snyk --version
         snyk_output=$(snyk container test n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high 2>&1)
+        snyk_exit_code=$?
         echo "Snyk output:"
         echo "$snyk_output"
+        if [ $snyk_exit_code -ne 0 ]; then
+          echo "Snyk scan failed with exit code $snyk_exit_code"
+        fi
         if [ -n "$snyk_output" ]; then
           echo "$snyk_output" | grep -A 3 -B 1 'severity' | while read -r line; do
             echo "Processing line: $line"
