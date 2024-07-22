@@ -52,15 +52,21 @@ jobs:
         echo "${{ steps.snyk-api.outputs.snyk-result }}"
         if [ -n "${{ steps.snyk-api.outputs.snyk-result }}" ]; then
           echo "${{ steps.snyk-api.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+            echo "Processing line: $line"
             if [[ $line == *"severity"* ]]; then
               severity=$(echo $line | awk '{print $3}')
+              echo "Severity: $severity"
             elif [[ $line == *"Description"* ]]; then
               description=$(echo $line | awk '{print $2}')
+              echo "Description: $description"
             elif [[ $line == *"Info"* ]]; then
               info=$(echo $line | awk '{print $2}')
+              echo "Info: $info"
               gh issue create --title "$severity vulnerability found in API image" --body "Description: $description\nInfo: $info"
             fi
           done
+        else
+          echo "No Snyk API scan results found."
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,15 +78,21 @@ jobs:
         echo "${{ steps.snyk-gateway.outputs.snyk-result }}"
         if [ -n "${{ steps.snyk-gateway.outputs.snyk-result }}" ]; then
           echo "${{ steps.snyk-gateway.outputs.snyk-result }}" | grep -A 3 -B 1 'severity' | while read line; do
+            echo "Processing line: $line"
             if [[ $line == *"severity"* ]]; then
               severity=$(echo $line | awk '{print $3}')
+              echo "Severity: $severity"
             elif [[ $line == *"Description"* ]]; then
               description=$(echo $line | awk '{print $2}')
+              echo "Description: $description"
             elif [[ $line == *"Info"* ]]; then
               info=$(echo $line | awk '{print $2}')
+              echo "Info: $info"
               gh issue create --title "$severity vulnerability found in Gateway image" --body "Description: $description\nInfo: $info"
             fi
           done
+        else
+          echo "No Snyk Gateway scan results found."
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
