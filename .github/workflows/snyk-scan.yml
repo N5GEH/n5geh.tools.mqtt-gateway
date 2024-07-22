@@ -45,12 +45,6 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       continue-on-error: true
 
-    - name: Print Working Directory
-      run: pwd
-
-    - name: List Files in Workspace
-      run: ls -al
-
     - name: Upload Snyk Results
       if: always()
       uses: actions/upload-artifact@v2
@@ -63,6 +57,8 @@ jobs:
     - name: Ensure Security Label Exists
       run: |
         gh label create security --color FF0000 --description "Security related issues" || echo "Label already exists"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create GitHub Issues for Vulnerabilities
       if: always()
@@ -72,16 +68,17 @@ jobs:
             vulnerabilities=$(jq -r '.vulnerabilities[] | @base64' $file)
             for vulnerability in $vulnerabilities; do
               _jq() {
-               echo ${vulnerability} | base64 --decode | jq -r ${1}
+                echo "${vulnerability}" | base64 --decode | jq -r ${1}
               }
               title="SNYK: $(_jq '.title')"
               description="## Description\n$(_jq '.description')\n\n## Info\n$(_jq '.url')\n\n## Severity\n$(_jq '.severity')\n\n## Introduced through\n$(_jq '.from | join(", ")')\n\n## Remediation\n$(_jq '.remediation')"
-              echo "Creating issue: $title"
-              gh issue create --title "$title" --body "$description" --label "security" || echo "Failed to create issue: $title"
+              echo "Creating issue: ${title}"
+              echo "Description: ${description}"
+              gh issue create --title "$title" --body "$description" --label "security" || echo "Failed to create issue: ${title}"
             done
           else
-            echo "File $file not found"
+            echo "File not found: ${file}"
           fi
         done
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
