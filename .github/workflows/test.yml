@@ -84,18 +84,18 @@ jobs:
 
     - name: Create GitHub issues for API image vulnerabilities
       if: steps.api_vuln_check.outputs.has_vulnerabilities > 0
-      uses: JasonEtco/create-an-issue@v2
+      uses: peter-evans/create-issue-from-file@v4
       with:
         title: "High/Critical Vulnerabilities Found in API Docker Image"
-        body: ${{ steps.api_issue_body.outputs.body }}
+        content-filepath: api_issue_body.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create GitHub issues for Gateway image vulnerabilities
       if: steps.gateway_vuln_check.outputs.has_vulnerabilities > 0
-      uses: JasonEtco/create-an-issue@v2
+      uses: peter-evans/create-issue-from-file@v4
       with:
         title: "High/Critical Vulnerabilities Found in Gateway Docker Image"
-        body: ${{ steps.gateway_issue_body.outputs.body }}
+        content-filepath: gateway_issue_body.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
