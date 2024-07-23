@@ -176,7 +176,7 @@ class MqttGateway(Client):
         else:
             headers = {
                 "fiware-service": service,
-                "fiware-servicepath": service_path,
+                "fiware-servicepath": service_path
             }
 
         # Get all datapoints for the topic from the cache
@@ -362,26 +362,42 @@ class MqttGateway(Client):
                 )
                 await asyncio.sleep(reconnect_interval)
 
-    # async def get_access_token(self):
-    #     async with aiohttp.ClientSession() as session:
-    #         data = {
-    #             'grant_type': 'client_credentials',
-    #             'client_id': client_id,
-    #             'client_secret': client_secret,
-    #         }
-    #         async with session.post(token_url, data=data) as response:
-    #             token_response = await response.json()
-    #             return token_response['access_token'], token_response['expires_in']
+    async def get_access_token(self):
+        """
+        Asynchronously requests a new access token using client credentials.
+
+        This method creates a new session and posts the client credentials to the token URL.
+        It expects the response to contain an access token and its expiry time.
+
+        Returns:
+            tuple: A tuple containing the access token and its expiry time in seconds.
+        """
+
+        async with aiohttp.ClientSession() as session:
+            data = {
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret
+            }
+            async with session.post(token_url, data=data) as response:
+                token_response = await response.json()
+
+                return token_response['access_token'], token_response['expires_in']
 
     async def refresh_token_if_needed(self):
+        """
+        Checks if the current access token is expired or not present, and refreshes it if needed.
+
+        This method verifies the current access token's validity based on its acquisition time
+        and expiry duration. If the token is found to be expired or not set, it requests a new one.
+        Upon successfully acquiring a new token, it updates the token properties of the instance
+        and logs the acquisition.
+        """
         if use_auth and (not self.access_token or
                          (time.time() - self.token_acquired_at) >= self.token_expires_in):
-            self.access_token, self.token_expires_in = await self.get_mock_access_token()
+            self.access_token, self.token_expires_in = await self.get_access_token()
             self.token_acquired_at = time.time()
             logging.info(f"Acquired new access token: {self.access_token}")
-
-    async def get_mock_access_token(self):
-        return "mock_access_token", 3600
 
 
 if __name__ == "__main__":
