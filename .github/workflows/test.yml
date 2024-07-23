@@ -28,7 +28,7 @@ jobs:
     - name: Install Snyk CLI
       run: npm install -g snyk
 
-    - name: Run Snyk to check API Docker image for vulnerabilities
+      - name: Run Snyk to check API Docker image for vulnerabilities
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -62,26 +62,32 @@ jobs:
         count=$(jq '.vulnerabilities | length' snyk-gateway-high-critical-report.json)
         echo "::set-output name=has_vulnerabilities::$count"
 
+    - name: Generate API issue body
+      id: api_issue_body
+      if: steps.api_vuln_check.outputs.has_vulnerabilities > 0
+      run: |
+        echo "### High/Critical Vulnerabilities Found in API Docker Image" > api_issue_body.txt
+        echo "The following high/critical vulnerabilities were found in the API Docker image:" >> api_issue_body.txt
+        jq -r '.vulnerabilities[] | "* \(.title): \(.description) (Severity: \(.severity))\n  Identifiers: \(.identifiers)"' snyk-api-high-critical-report.json >> api_issue_body.txt
+        echo "Please review and address these vulnerabilities as soon as possible." >> api_issue_body.txt
+        echo "::set-output name=body::$(cat api_issue_body.txt)"
+
+    - name: Generate Gateway issue body
+      id: gateway_issue_body
+      if: steps.gateway_vuln_check.outputs.has_vulnerabilities > 0
+      run: |
+        echo "### High/Critical Vulnerabilities Found in Gateway Docker Image" > gateway_issue_body.txt
+        echo "The following high/critical vulnerabilities were found in the Gateway Docker image:" >> gateway_issue_body.txt
+        jq -r '.vulnerabilities[] | "* \(.title): \(.description) (Severity: \(.severity))\n  Identifiers: \(.identifiers)"' snyk-gateway-high-critical-report.json >> gateway_issue_body.txt
+        echo "Please review and address these vulnerabilities as soon as possible." >> gateway_issue_body.txt
+        echo "::set-output name=body::$(cat gateway_issue_body.txt)"
+
     - name: Create GitHub issues for API image vulnerabilities
       if: steps.api_vuln_check.outputs.has_vulnerabilities > 0
       uses: JasonEtco/create-an-issue@v2
       with:
         title: "High/Critical Vulnerabilities Found in API Docker Image"
-        body: |
-          **High/Critical Vulnerabilities Found in API Docker Image**
-          The following high/critical vulnerabilities were found in the API Docker image:
-
-          ```json
-          ${{ steps.api_vuln_check.outputs.has_vulnerabilities }}
-          ```
-
-          **Details:**
-          ```json
-          ${{ steps.api_vuln_check.outputs.has_vulnerabilities | fromJson | .vulnerabilities | map(.title, .description, .severity, .identifiers) }}
-          ```
-
-          Please review and address these vulnerabilities as soon as possible.
-        filename: snyk-api-high-critical-report.json
+        body: ${{ steps.api_issue_body.outputs.body }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -90,20 +96,6 @@ jobs:
       uses: JasonEtco/create-an-issue@v2
       with:
         title: "High/Critical Vulnerabilities Found in Gateway Docker Image"
-        body: |
-          **High/Critical Vulnerabilities Found in Gateway Docker Image**
-          The following high/critical vulnerabilities were found in the Gateway Docker image:
-
-          ```json
-          ${{ steps.gateway_vuln_check.outputs.has_vulnerabilities }}
-          ```
-
-          **Details:**
-          ```json
-          ${{ steps.gateway_vuln_check.outputs.has_vulnerabilities | fromJson | .vulnerabilities | map(.title, .description, .severity, .identifiers) }}
-          ```
-
-          Please review and address these vulnerabilities as soon as possible.
-        filename: snyk-gateway-high-critical-report.json
+        body: ${{ steps.gateway_issue_body.outputs.body }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
