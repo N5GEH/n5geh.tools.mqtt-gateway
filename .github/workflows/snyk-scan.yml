@@ -3,7 +3,7 @@ name: Snyk Container Scan
 on:
   push:
     branches:
-      - main
+      - 20-security-scan-of-the-image
   pull_request:
     branches:
       - main
@@ -14,10 +14,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v3  # Using the latest version
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v3  # Using the latest version
 
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
@@ -26,66 +26,17 @@ jobs:
       run: docker build -t n5gehtoolsmqtt-gateway-gateway:latest -f ./backend/gateway/Dockerfile .
 
     - name: Snyk Scan API image
-      id: snyk_api
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-api:latest'
-        args: '--severity-threshold=high --json-file-output=snyk-api-results.json'
+        args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true
 
     - name: Snyk Scan Gateway image
-      id: snyk_gateway
       uses: snyk/actions/docker@master
       with:
         image: 'n5gehtoolsmqtt-gateway-gateway:latest'
-        args: '--severity-threshold=high --json-file-output=snyk-gateway-results.json'
+        args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true
-
-    - name: Upload Snyk Results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: snyk-results
-        path: |
-          snyk-api-results.json
-          snyk-gateway-results.json
-
-    - name: Ensure Security Label Exists
-      run: |
-        gh label create security --color FF0000 --description "Security related issues" || echo "Label already exists"
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Create GitHub Issues for Vulnerabilities
-      if: always()
-      run: |
-        for file in snyk-api-results.json snyk-gateway-results.json; do
-          if [ -f "$file" ]; then
-            vulnerabilities=$(jq -r '.vulnerabilities[] | select(.severity == "high" or .severity == "critical") | @base64' $file)
-            for vulnerability in $vulnerabilities; do
-              _jq() {
-                echo "${vulnerability}" | base64 --decode | jq -r ${1}
-              }
-              title="SNYK: $(_jq '.title')"
-              description="## Description\n$(_jq '.description')\n\n## Info\n$(_jq '.url')\n\n## Severity\n$(_jq '.severity')\n\n## Introduced through\n$(_jq '.from | join(", ")')\n\n## Remediation\n$(_jq '.remediation')"
-              
-              # Check if issue already exists
-              existing_issue=$(gh issue list -R yourusername/yourrepository --search "$title" --json number --jq '.[].number')
-              if [ -z "$existing_issue" ]; then
-                echo "Creating issue: ${title}"
-                echo "Description: ${description}"
-                gh issue create --title "$title" --body "$description" --label "security" || echo "Failed to create issue: ${title}"
-              else
-                echo "Issue already exists: ${title}"
-              fi
-            done
-          else
-            echo "File not found: ${file}"
-          fi
-        done
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
