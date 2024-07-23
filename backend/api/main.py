@@ -6,7 +6,7 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, Extra, validator
+from pydantic import field_validator, BaseModel, Field, ConfigDict
 from redis import asyncio as aioredis
 import aiohttp
 import logging
@@ -39,6 +39,8 @@ logging.basicConfig(level=settings.LOG_LEVEL.upper(),
 
 # Pydantic model
 class Datapoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     object_id: Optional[str] = Field(None, min_length=1, max_length=255)
     jsonpath: str
     topic: str
@@ -47,8 +49,11 @@ class Datapoint(BaseModel):
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
+    subscribe: Optional[bool] = None
+    matchdatapoint: Optional[bool] = None
 
-    @validator('object_id')
+    @field_validator('object_id')
+    @classmethod
     def validate_object_id(cls, value):
         if value is not None:
             if not re.match(r'^[a-zA-Z0-9_\-:]+$', value):
@@ -57,18 +62,27 @@ class Datapoint(BaseModel):
 
 
 class DatapointUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
+    subscribe: Optional[bool] = None
+    matchdatapoint: Optional[bool] = None
+
 
 class DatapointPartialUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
+    subscribe: Optional[bool] = None
+    matchdatapoint: Optional[bool] = None
 
 
 @app.on_event("startup")
@@ -188,7 +202,10 @@ async def get_datapoints(
         rows = await conn.fetch(query, *params)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return rows
+
+    # Ensure each row includes the "subscribe" field
+    response = [{**dict(row), "subscribe": None} for row in rows]
+    return response
 @app.get(
     "/data/{object_id}",
     response_model=Datapoint,
@@ -706,7 +723,7 @@ async def get_version_info():
     """
     Return version information for the application and its dependencies.
     """
-    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "pydantic-settings","redis", "uvicorn"]
     def get_dependency_version(package: str):
         """
         Get the version of a package.

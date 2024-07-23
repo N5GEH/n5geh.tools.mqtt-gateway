@@ -1,6 +1,7 @@
 import logging
 from dotenv import find_dotenv
-from pydantic import AnyUrl, AnyHttpUrl, BaseSettings, Field, root_validator
+from pydantic import AnyUrl, AnyHttpUrl, Field, root_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TestSettings(BaseSettings):
@@ -8,29 +9,20 @@ class TestSettings(BaseSettings):
 
     """
     GATEWAY_URL: AnyHttpUrl = Field(default="http://localhost:8000",
-                                    env=["GATEWAY_URL"])
+                                    validation_alias=["GATEWAY_URL"])
     ORION_URL: AnyHttpUrl = Field(default="http://localhost:1026",
-                                  env=["ORION_URL"])
+                                  validation_alias=["ORION_URL"])
     MQTT_HOST: str = Field(default="localhost",
-                           env=["MQTT_HOST"])
+                           validation_alias=["MQTT_HOST"])
     MQTT_PORT: int = Field(default="1883",
-                           env=["MQTT_PORT"])
+                           validation_alias=["MQTT_PORT"])
     FIWARE_SERVICE: str = Field(default="gateway_test",
-                                env=["FIWARE_SERVICE"])
+                                validation_alias=["FIWARE_SERVICE"])
     FIWARE_SERVICEPATH: str = Field(default="/",
-                                    env=["FIWARE_PATH",
+                                    validation_alias=["FIWARE_PATH",
                                          "FIWARE_SERVICEPATH",
                                          "FIWARE_SERVICE_PATH"])
-
-    class Config:
-        """
-        Pydantic configuration
-        """
-        env_file = find_dotenv(".env")
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        use_enum_values = True
-        allow_reuse = True
+    model_config = SettingsConfigDict(env_file=find_dotenv(".env"), env_file_encoding="utf-8", case_sensitive=False, use_enum_values=True, allow_reuse=True)
 
 
 # create settings object
