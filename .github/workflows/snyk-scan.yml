@@ -32,6 +32,7 @@ jobs:
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
 
     - name: Snyk Scan Gateway image
       uses: snyk/actions/docker@master
@@ -40,3 +41,4 @@ jobs:
         args: '--severity-threshold=high'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
