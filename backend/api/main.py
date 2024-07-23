@@ -50,7 +50,6 @@ class Datapoint(BaseModel):
     description: Optional[str] = ""
     connected: Optional[bool] = None
     subscribe: Optional[bool] = None
-    matchdatapoint: Optional[bool] = None
 
     @field_validator('object_id')
     @classmethod
@@ -70,7 +69,6 @@ class DatapointUpdate(BaseModel):
     description: Optional[str] = ""
     connected: Optional[bool] = None
     subscribe: Optional[bool] = None
-    matchdatapoint: Optional[bool] = None
 
 
 class DatapointPartialUpdate(BaseModel):
@@ -82,7 +80,6 @@ class DatapointPartialUpdate(BaseModel):
     description: Optional[str] = ""
     connected: Optional[bool] = None
     subscribe: Optional[bool] = None
-    matchdatapoint: Optional[bool] = None
 
 
 @app.on_event("startup")
@@ -233,8 +230,11 @@ async def get_datapoint(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
-    return row
 
+    # Ensure each row includes the "subscribe" field
+    datapoint = {**dict(row), "subscribe": None}
+
+    return datapoint
 
 
 @app.post(
@@ -502,6 +502,7 @@ async def partial_update_datapoint(
                         "entity_type": updated_datapoint['entity_type'],
                         "attribute_name": updated_datapoint['attribute_name'],
                         "description": updated_datapoint['description'],
+                        "connected": updated_datapoint['connected'],
                     }
                 ),
             )
@@ -509,7 +510,20 @@ async def partial_update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
-        return updated_datapoint
+        # Construct the response to ensure it includes all required fields
+        response_datapoint = Datapoint(
+            object_id=updated_datapoint['object_id'],
+            jsonpath=updated_datapoint['jsonpath'],
+            topic=updated_datapoint['topic'],
+            entity_id=updated_datapoint['entity_id'],
+            entity_type=updated_datapoint['entity_type'],
+            attribute_name=updated_datapoint['attribute_name'],
+            description=updated_datapoint['description'],
+            connected=updated_datapoint['connected'],
+            subscribe=None  # Adjust this as needs
+        )
+
+        return response_datapoint
 
     except Exception as e:
         logging.error(str(e))
