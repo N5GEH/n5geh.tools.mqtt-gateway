@@ -71,9 +71,9 @@ jobs:
               const issueBody = `
                 A security vulnerability has been detected in the **${alert.package_name}** package.
 
-                **Severity**: **${alert.severity}**
+                **Severity**: ${alert.severity}
 
-                **Summary**: **${alert.summary}**
+                **Summary**: ${alert.summary}
 
                 **Details**: [View alert](${alert.url})
 
