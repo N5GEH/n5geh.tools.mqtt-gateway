@@ -1,13 +1,6 @@
 name: setup-docker-and-run-tests.yml
 
-on:
-  push:
-    branches:
-      - 14-integrate-docker-services-and-unitest-in-github-actions
-  pull_request:
-    branches:
-      - main
-
+on: [push]
 
 jobs:
   setup-and-start-services:
@@ -56,6 +49,26 @@ jobs:
           name: container-ip
           path: container_ip.txt
 
+      - name: Persist Containers
+        run: |
+          RUNNER_TRACKING_ID="" && sleep infinity &
+        background: true
+
+  run-tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: setup-and-start-services
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: container-ip
+          path: .
+
       - name: Read IP address
         id: read-ip
         run: |
@@ -92,3 +105,5 @@ jobs:
           source venv/bin/activate
           cd tests
           python -m unittest test_crud.py
+
+
