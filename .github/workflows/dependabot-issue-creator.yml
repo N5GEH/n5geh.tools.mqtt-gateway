@@ -10,8 +10,6 @@ jobs:
   create_issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug event
-        run: echo "${{ toJson(github.event) }}"
       
       - name: Create issue
         uses: actions/github-script@v5
