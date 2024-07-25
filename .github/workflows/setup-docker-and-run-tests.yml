@@ -19,7 +19,7 @@ jobs:
 
       - name: Build docker images
         run: |
-          cd ..
+          cd n5geh.tools.mqtt-gateway/
           docker compose build
           docker compose up -d
 
