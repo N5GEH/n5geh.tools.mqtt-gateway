@@ -75,12 +75,28 @@ jobs:
           cd tests
           cp .env.test.example .env
           sed -i "s/localhost/$CONTAINER_IP/g" .env
-          
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+
+      - name: Install requirements
+        run: |
+          source venv/bin/activate
+          pip install -r tests/requirements.txt
+
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
 
       - name: Run tests
         run: |
+          source venv/bin/activate
           cd tests
-          pip install -r requirements.txt
           python -m unittest test_crud.py
