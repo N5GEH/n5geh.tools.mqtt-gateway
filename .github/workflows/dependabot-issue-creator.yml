@@ -24,8 +24,15 @@ jobs:
             console.log('Pull Request:', pr);
 
             const { title, html_url, number } = pr;
-            const issueTitle = Dependency update: ${title};
-            const issueBody = A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.;
+
+            // Check if the title contains "dependency update"
+            if (!title.toLowerCase().includes('dependency update')) {
+              console.log('Pull request is not a dependency update. No issue will be created.');
+              return;
+            }
+
+            const issueTitle = `Dependency update: ${title}`;
+            const issueBody = `A new dependency update PR [#${number}](${html_url}) has been created. Please review and merge if appropriate.`;
 
             console.log('Creating issue with title:', issueTitle);
             console.log('Creating issue with body:', issueBody);
