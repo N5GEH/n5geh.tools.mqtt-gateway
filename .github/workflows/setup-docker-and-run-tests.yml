@@ -76,6 +76,8 @@ jobs:
           cp .env.test.example .env
           sed -i "s/localhost/$CONTAINER_IP/g" .env
           
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
 
       - name: Run tests
         run: |
