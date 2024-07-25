@@ -67,13 +67,27 @@ jobs:
         script: |
           const fs = require('fs');
           const snykResults = JSON.parse(fs.readFileSync('snyk_api_results.json', 'utf-8'));
-          
+
           const highCriticalVulnerabilities = snykResults.vulnerabilities.filter(vuln => 
             vuln.severity === 'high' || vuln.severity === 'critical'
           );
 
+          const existingIssues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'snyk'
+          });
+
           for (const vuln of highCriticalVulnerabilities) {
             const issueTitle = `Snyk Security Alert: ${vuln.title} - ${vuln.severity}`;
+            
+            const issueExists = existingIssues.data.some(issue => issue.title === issueTitle);
+            if (issueExists) {
+              console.log(`Issue already exists: ${issueTitle}`);
+              continue;
+            }
+
             const issueBody = `
               A security vulnerability has been detected in the \`${vuln.packageName}\` package.
 
@@ -85,6 +99,10 @@ jobs:
 
               **Details**: [View alert](${vuln.url})
 
+              Introduced through: ${vuln.from.join(', ')}
+
+              From: ${vuln.from.join(' > ')}
+
               Please review and address this issue accordingly.
             `;
 
@@ -95,7 +113,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
-              body: issueBody
+              body: issueBody,
+              labels: ['snyk']
             });
 
             // Add a delay to avoid rate limit issues
@@ -110,13 +129,27 @@ jobs:
         script: |
           const fs = require('fs');
           const snykResults = JSON.parse(fs.readFileSync('snyk_gateway_results.json', 'utf-8'));
-          
+
           const highCriticalVulnerabilities = snykResults.vulnerabilities.filter(vuln => 
             vuln.severity === 'high' || vuln.severity === 'critical'
           );
 
+          const existingIssues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'snyk'
+          });
+
           for (const vuln of highCriticalVulnerabilities) {
             const issueTitle = `Snyk Security Alert: ${vuln.title} - ${vuln.severity}`;
+            
+            const issueExists = existingIssues.data.some(issue => issue.title === issueTitle);
+            if (issueExists) {
+              console.log(`Issue already exists: ${issueTitle}`);
+              continue;
+            }
+
             const issueBody = `
               A security vulnerability has been detected in the \`${vuln.packageName}\` package.
 
@@ -128,6 +161,10 @@ jobs:
 
               **Details**: [View alert](${vuln.url})
 
+              Introduced through: ${vuln.from.join(', ')}
+
+              From: ${vuln.from.join(' > ')}
+
               Please review and address this issue accordingly.
             `;
 
@@ -138,7 +175,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
-              body: issueBody
+              body: issueBody,
+              labels: ['snyk']
             });
 
             // Add a delay to avoid rate limit issues
