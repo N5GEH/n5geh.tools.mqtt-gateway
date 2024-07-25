@@ -68,16 +68,13 @@ jobs:
                 continue;
               }
 
-              const issueBody = `
-A security vulnerability has been detected in the **${alert.package_name}** package.
-
-**Severity**: ${alert.severity}
-
-**Summary**: ${alert.summary}
-
-**Details**: [View alert](${alert.url})
-
-Please review and address this issue accordingly.
+              const issueBody = `A security vulnerability has been detected in the **${alert.package_name}** package.
+              
+              **Severity**: ${alert.severity}
+              **Summary**: ${alert.summary}
+              **Details**: [View alert](${alert.url})
+              
+              Please review and address this issue accordingly.
               `;
 
               console.log('Creating issue with title:', issueTitle);
