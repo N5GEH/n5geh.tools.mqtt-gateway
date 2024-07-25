@@ -27,29 +27,37 @@ jobs:
 
     - name: Snyk Scan API image
       id: snyk_api_scan
-      run: snyk test --docker n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high > snyk_api_results.txt || true
+      uses: snyk/actions/docker@master
+      with:
+        image: 'n5gehtoolsmqtt-gateway-api:latest'
+        args: '--severity-threshold=high --json-file-output=snyk_api_results.json'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
 
     - name: Snyk Scan Gateway image
       id: snyk_gateway_scan
-      run: snyk test --docker n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high > snyk_gateway_results.txt || true
+      uses: snyk/actions/docker@master
+      with:
+        image: 'n5gehtoolsmqtt-gateway-gateway:latest'
+        args: '--severity-threshold=high --json-file-output=snyk_gateway_results.json'
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
 
     - name: Upload Snyk API scan results
       if: always()
       uses: actions/upload-artifact@v3
       with:
         name: snyk-api-results
-        path: snyk_api_results.txt
+        path: snyk_api_results.json
 
     - name: Upload Snyk Gateway scan results
       if: always()
       uses: actions/upload-artifact@v3
       with:
         name: snyk-gateway-results
-        path: snyk_gateway_results.txt
+        path: snyk_gateway_results.json
 
     - name: Create issues from Snyk API scan
       if: always()
