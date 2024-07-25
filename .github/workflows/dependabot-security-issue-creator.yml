@@ -72,7 +72,7 @@ jobs:
               
               **Severity**: ${alert.severity}
               **Summary**: ${alert.summary}
-              **Details**: [View alert](${alert.url})
+              **Details**: (${alert.url})
               
               Please review and address this issue accordingly.
               `;
