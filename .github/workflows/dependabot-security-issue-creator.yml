@@ -74,4 +74,3 @@ jobs:
                 body: issueBody
               });
             }
-S
