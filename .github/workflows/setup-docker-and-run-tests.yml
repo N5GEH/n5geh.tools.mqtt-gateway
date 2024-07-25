@@ -74,9 +74,11 @@ jobs:
         run: |
           cd tests
           cp .env.test.example .env
+          sed -i "s/localhost/$CONTAINER_IP/g" .env
           
 
       - name: Run tests
         run: |
           cd tests
+          pip install -r requirements.txt
           python -m unittest test_crud.py
