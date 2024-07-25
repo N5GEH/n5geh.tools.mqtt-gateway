@@ -36,7 +36,7 @@ jobs:
               url: alert.html_url
             }))));
 
-      - name: Create issues
+      - name: Check for existing issues and create new ones
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
@@ -47,6 +47,12 @@ jobs:
               return;
             }
 
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
             for (const alert of alerts) {
               if (alert.severity.toLowerCase() !== 'high') {
                 console.log(`Skipping non-high severity alert: ${alert.package_name} - ${alert.severity}`);
@@ -55,12 +61,19 @@ jobs:
 
               const alertNumber = alert.url.split('/').pop();
               const issueTitle = `Security Alert: Dependabot issue (${alertNumber}) - ${alert.severity}`;
+
+              const issueExists = existingIssues.data.some(issue => issue.title === issueTitle);
+              if (issueExists) {
+                console.log(`Issue already exists for alert ${alertNumber}. Skipping creation.`);
+                continue;
+              }
+
               const issueBody = `
-                A security vulnerability has been detected in the \`${alert.package_name}\` package.
+                A security vulnerability has been detected in the **${alert.package_name}** package.
 
-                **Severity**: ${alert.severity}
+                **Severity**: **${alert.severity}**
 
-                **Summary**: ${alert.summary}
+                **Summary**: **${alert.summary}**
 
                 **Details**: [View alert](${alert.url})
 
