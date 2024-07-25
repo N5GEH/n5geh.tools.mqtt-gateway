@@ -37,7 +37,7 @@ jobs:
             }))));
 
       - name: Create issues
-        if: steps.fetch_alerts.outputs.alerts != 'null'
+        if: ${{ steps.fetch_alerts.outputs.alerts != 'null' }}
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
