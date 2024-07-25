@@ -1,4 +1,4 @@
-name: Create Issues from High Severity Dependabot Alerts
+name: Dependabot Security Issues
 
 on:
   push:
