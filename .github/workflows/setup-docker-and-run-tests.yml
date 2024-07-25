@@ -1,6 +1,13 @@
 name: setup-docker-and-run-tests.yml
 
-on: [push]
+on:
+  push:
+    branches:
+      - 14-integrate-docker-services-and-unitest-in-github-actions
+  pull_request:
+    branches:
+      - main
+
 
 jobs:
   setup-and-start-services:
