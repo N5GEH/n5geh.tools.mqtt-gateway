@@ -37,14 +37,11 @@ jobs:
             }))));
 
       - name: Create issues
-        if: steps.fetch_alerts.outputs.alerts != 'null'
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
           script: |
-            const alerts = JSON.parse(`${
-              steps.fetch_alerts.outputs.alerts
-            }`);
+            const alerts = JSON.parse(process.env.ALERTS);
             if (!alerts || alerts.length === 0) {
               console.log('No alerts to create issues for.');
               return;
@@ -74,3 +71,5 @@ jobs:
                 body: issueBody
               });
             }
+        env:
+          ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
