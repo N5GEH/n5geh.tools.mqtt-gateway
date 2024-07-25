@@ -17,6 +17,10 @@ jobs:
           docker compose pull
           docker compose up -d
 
+      - name: Create .env File
+        run: |
+          cp .env.EXAMPLE .env
+
       - name: Build docker images
         run: |
           docker compose build
