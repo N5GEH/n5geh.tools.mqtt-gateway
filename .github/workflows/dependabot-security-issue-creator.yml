@@ -53,7 +53,8 @@ jobs:
                 continue;
               }
 
-              const issueTitle = `Security Alert: ${alert.package_name} - ${alert.severity}`;
+              const alertNumber = alert.url.split('/').pop();
+              const issueTitle = `Security Alert: Dependabot issue (${alertNumber}) - ${alert.severity}`;
               const issueBody = `
                 A security vulnerability has been detected in the \`${alert.package_name}\` package.
 
