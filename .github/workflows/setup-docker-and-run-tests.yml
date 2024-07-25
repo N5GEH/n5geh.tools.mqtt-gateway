@@ -95,8 +95,20 @@ jobs:
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
 
-      - name: Run tests
+      - name: Run test_init.py
         run: |
           source venv/bin/activate
           cd tests
-          python -m unittest test_crud.py
+          python -m unittest test_init.py -v
+
+      - name: Run test_crud.py
+        run: |
+          source venv/bin/activate
+          cd tests
+          python -m unittest test_crud.py -v
+
+      - name: Run test_forwarding.py
+        run: |
+          source venv/bin/activate
+          cd tests
+          python -m unittest test_forwarding.py -v
