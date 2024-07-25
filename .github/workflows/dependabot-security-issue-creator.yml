@@ -1,4 +1,4 @@
-name: Create Issues from Dependabot Alerts
+name: Create Issues from High Severity Dependabot Alerts
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
 
             core.setOutput('alerts', JSON.stringify(alerts.data.map(alert => ({
               number: alert.number,
-              package_name: alert.security_advisory.identifier,
+              package_name: alert.security_advisory?.identifiers[0]?.value || 'dependabot issues',
               severity: alert.security_advisory.severity,
               summary: alert.security_advisory.summary,
               url: alert.html_url
@@ -48,6 +48,11 @@ jobs:
             }
 
             for (const alert of alerts) {
+              if (alert.severity.toLowerCase() !== 'high') {
+                console.log(`Skipping non-high severity alert: ${alert.package_name} - ${alert.severity}`);
+                continue;
+              }
+
               const issueTitle = `Security Alert: ${alert.package_name} - ${alert.severity}`;
               const issueBody = `
                 A security vulnerability has been detected in the \`${alert.package_name}\` package.
@@ -70,6 +75,9 @@ jobs:
                 title: issueTitle,
                 body: issueBody
               });
+
+              // Add a delay to avoid rate limit issues
+              await new Promise(resolve => setTimeout(resolve, 2000));
             }
         env:
           ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
