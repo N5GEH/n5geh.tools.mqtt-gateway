@@ -36,8 +36,29 @@ jobs:
               url: alert.html_url
             }))));
 
+      - name: Get milestone ID
+        id: get_milestone
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            const milestone = milestones.data.find(milestone => milestone.title === 'Security Issues');
+            if (!milestone) {
+              throw new Error('Milestone "security issues" not found');
+            }
+
+            core.setOutput('milestone_id', milestone.number);
+
       - name: Check for existing issues and create new ones
         uses: actions/github-script@v5
+        env:
+          ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
+          MILESTONE_ID: ${{ steps.get_milestone.outputs.milestone_id }}
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
           script: |
@@ -84,11 +105,11 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: issueTitle,
-                body: issueBody
+                body: issueBody,
+                labels: ['security'],
+                milestone: parseInt(process.env.MILESTONE_ID)
               });
 
               // Add a delay to avoid rate limit issues
               await new Promise(resolve => setTimeout(resolve, 2000));
             }
-        env:
-          ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
