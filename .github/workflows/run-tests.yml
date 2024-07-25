@@ -1,7 +1,7 @@
 name: Run Tests
 on:
   workflow_run:
-    workflows: [Setup Docker Containers]
+    workflows: ["Setup Docker Containers"]
     types: [completed]
 jobs:
   run-tests:
