@@ -1,4 +1,5 @@
 name: Setup Docker Containers
+
 on: [push]
 
 jobs:
@@ -12,12 +13,11 @@ jobs:
       - name: Create .env file
         run: cp .env.EXAMPLE .env
 
-      - name: Set up Fiware Environment
-        uses: hoverkraft-tech/compose-action@v2.0.1
-        with:
-          compose-file: "./fiware-environment/docker-compose.yml"
-
-      - name: Run docker-compose
-        uses: hoverkraft-tech/compose-action@v2.0.1
-        with:
-          compose-file: "./docker-compose.yml"
+      - name: Set up Docker
+        run: |
+          cd fiware-environment
+          docker compose pull 
+          docker compose up -d
+          cd ..
+          docker compose build
+          docker compose up -d
