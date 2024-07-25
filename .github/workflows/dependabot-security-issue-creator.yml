@@ -6,8 +6,9 @@ on:
       - 30-setup-dependabot-workflow
 
 jobs:
-  create_issue:
+  create_issues_from_alerts:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
