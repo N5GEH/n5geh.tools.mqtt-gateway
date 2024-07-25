@@ -1,0 +1,56 @@
+name: Create Issues from Security Alerts
+
+on:
+  repository_vulnerability_alert:
+    types:
+      - create
+      - resolve
+      - reopen
+
+jobs:
+  create_issue:
+    runs-on: ubuntu-latest
+    steps:
+      
+      - name: Create issue from security alert
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const alert = context.payload.alert;
+            if (!alert) {
+              core.setFailed('No security alert found in context payload.');
+              return;
+            }
+            console.log('Security Alert:', alert);
+
+            const { affected_package_name, external_identifier, external_reference, severity, vulnerable_requirements, fixed_in } = alert;
+            const issueTitle = `Security Alert: ${affected_package_name} - ${severity}`;
+            const issueBody = `
+              A security vulnerability has been detected in the \`${affected_package_name}\` package.
+
+              **Severity**: ${severity}
+
+              **Vulnerable requirements**: ${vulnerable_requirements}
+
+              **External identifier**: ${external_identifier}
+              
+              **External reference**: ${external_reference}
+
+              **Fixed in**: ${fixed_in}
+
+              Please review and address this issue accordingly.
+            `;
+
+            console.log('Creating issue with title:', issueTitle);
+            console.log('Creating issue with body:', issueBody);
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody
+            });
+
+            console.log('Issue created:', issue.data.html_url);
+            core.setOutput('issue_url', issue.data.html_url);
