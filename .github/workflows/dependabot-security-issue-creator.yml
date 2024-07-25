@@ -19,8 +19,6 @@ jobs:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
           script: |
             const alerts = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
               per_page: 100
             });
 
@@ -38,7 +36,7 @@ jobs:
             })));
 
       - name: Create issues
-        if: ${{ steps.fetch_alerts.outputs.result != 'null' }}
+        if: steps.fetch_alerts.outputs.result != 'null'
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
