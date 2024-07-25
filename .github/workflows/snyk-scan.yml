@@ -75,7 +75,7 @@ jobs:
                 currentIssue = { title: line.trim(), details: '' };
               } else if (line.startsWith('Recommendations for base image upgrade:')) {
                 currentIssue = null;
-                recommendations = line.trim();
+                recommendations += line.trim() + '\n';
               } else if (currentIssue) {
                 currentIssue.details += line.trim() + '\n';
               }
@@ -155,7 +155,7 @@ jobs:
                 currentIssue = { title: line.trim(), details: '' };
               } else if (line.startsWith('Recommendations for base image upgrade:')) {
                 currentIssue = null;
-                recommendations = line.trim();
+                recommendations += line.trim() + '\n';
               } else if (currentIssue) {
                 currentIssue.details += line.trim() + '\n';
               }
@@ -212,4 +212,4 @@ jobs:
                 labels: ['snyk']
               });
             }
-         
+          }
