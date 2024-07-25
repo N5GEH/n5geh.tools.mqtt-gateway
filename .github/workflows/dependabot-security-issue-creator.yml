@@ -27,21 +27,21 @@ jobs:
               return;
             }
 
-            return JSON.stringify(alerts.data.map(alert => ({
+            core.setOutput('alerts', JSON.stringify(alerts.data.map(alert => ({
               number: alert.number,
               package_name: alert.security_advisory.identifier,
               severity: alert.security_advisory.severity,
               summary: alert.security_advisory.summary,
               url: alert.html_url
-            })));
+            }))));
 
       - name: Create issues
-        if: steps.fetch_alerts.outputs.result != 'null'
+        if: steps.fetch_alerts.outputs.alerts != 'null'
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
           script: |
-            const alerts = JSON.parse('${{ steps.fetch_alerts.outputs.result }}');
+            const alerts = JSON.parse('${{ steps.fetch_alerts.outputs.alerts }}');
             if (!alerts || alerts.length === 0) {
               console.log('No alerts to create issues for.');
               return;
