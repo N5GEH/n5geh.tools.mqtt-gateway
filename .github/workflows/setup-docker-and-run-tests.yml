@@ -33,6 +33,22 @@ jobs:
             sleep 5
           done
 
+      - name: Get Docker container IP
+        id: get-ip
+        run: |
+          CONTAINER_ID = $(docker ps -q --filter "name=mqtt_gateway_api")
+          CONTAINER_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $CONTAINER_ID)
+          echo "CONTAINER_IP=$CONTAINER_IP" >> $GITHUB_ENV
+
+      - name: Save IP address
+        run: echo $CONTAINER_IP > container_ip.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: container-ip
+          path: container_ip.txt
+
   run-tests:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -40,7 +56,25 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@4
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: container-ip
+          path: .
+
+      - name: Read IP address
+        id: read-ip
+        run: |
+          CONTAINER_IP=$(cat container_ip.txt)
+          echo "CONTAINER_IP=$CONTAINER_IP" >> $GITHUB_ENV
+
+      - name: Create .env File
+        run: |
+          cd tests
+          cp .env.test.example .env
+          
 
       - name: Run tests
         run: |
