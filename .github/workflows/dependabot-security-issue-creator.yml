@@ -18,7 +18,7 @@ jobs:
         with:
           github-token: ${{ secrets.DEPENDABOT_PAT }}
           script: |
-            const alerts = await github.request('GET /repos/{owner}/{repo}/dependabot/alerts', {
+            const alerts = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
               owner: context.repo.owner,
               repo: context.repo.repo,
               per_page: 100
