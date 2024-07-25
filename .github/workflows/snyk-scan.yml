@@ -66,7 +66,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const fs = require('fs');
-          const snykOutput = fs.readFileSync('snyk_api_results.txt', 'utf-8');
+          const snykOutput = fs.readFileSync('snyk_api_results.json', 'utf-8');
 
           const parseSnykOutput = (output) => {
             const lines = output.split('\n');
@@ -146,7 +146,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const fs = require('fs');
-          const snykOutput = fs.readFileSync('snyk_gateway_results.txt', 'utf-8');
+          const snykOutput = fs.readFileSync('snyk_gateway_results.json', 'utf-8');
 
           const parseSnykOutput = (output) => {
             const lines = output.split('\n');
