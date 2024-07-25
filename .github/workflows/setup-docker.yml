@@ -21,3 +21,6 @@ jobs:
           cd ..
           docker compose build
           docker compose up -d
+
+      - name: Call run-tests workflow
+        uses: ./.github/workflows/run-tests.yml
