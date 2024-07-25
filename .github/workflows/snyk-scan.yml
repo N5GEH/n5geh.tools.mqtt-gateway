@@ -19,6 +19,9 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    - name: Install Snyk CLI
+      run: npm install -g snyk
+
     - name: Build API image
       run: docker build -t n5gehtoolsmqtt-gateway-api:latest -f ./backend/api/Dockerfile .
 
@@ -27,37 +30,29 @@ jobs:
 
     - name: Snyk Scan API image
       id: snyk_api_scan
-      uses: snyk/actions/docker@master
-      with:
-        image: 'n5gehtoolsmqtt-gateway-api:latest'
-        args: '--severity-threshold=high --json-file-output=snyk_api_results.json'
+      run: snyk test --docker n5gehtoolsmqtt-gateway-api:latest --severity-threshold=high > snyk_api_results.txt || true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true
 
     - name: Snyk Scan Gateway image
       id: snyk_gateway_scan
-      uses: snyk/actions/docker@master
-      with:
-        image: 'n5gehtoolsmqtt-gateway-gateway:latest'
-        args: '--severity-threshold=high --json-file-output=snyk_gateway_results.json'
+      run: snyk test --docker n5gehtoolsmqtt-gateway-gateway:latest --severity-threshold=high > snyk_gateway_results.txt || true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true
 
     - name: Upload Snyk API scan results
       if: always()
       uses: actions/upload-artifact@v3
       with:
         name: snyk-api-results
-        path: snyk_api_results.json
+        path: snyk_api_results.txt
 
     - name: Upload Snyk Gateway scan results
       if: always()
       uses: actions/upload-artifact@v3
       with:
         name: snyk-gateway-results
-        path: snyk_gateway_results.json
+        path: snyk_gateway_results.txt
 
     - name: Create issues from Snyk API scan
       if: always()
@@ -66,7 +61,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const fs = require('fs');
-          const snykOutput = fs.readFileSync('snyk_api_results.json', 'utf-8');
+          const snykOutput = fs.readFileSync('snyk_api_results.txt', 'utf-8');
 
           const parseSnykOutput = (output) => {
             const lines = output.split('\n');
@@ -146,7 +141,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const fs = require('fs');
-          const snykOutput = fs.readFileSync('snyk_gateway_results.json', 'utf-8');
+          const snykOutput = fs.readFileSync('snyk_gateway_results.txt', 'utf-8');
 
           const parseSnykOutput = (output) => {
             const lines = output.split('\n');
@@ -217,4 +212,4 @@ jobs:
                 labels: ['snyk']
               });
             }
-          }
+         
