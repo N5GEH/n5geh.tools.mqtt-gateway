@@ -1,56 +1,74 @@
-name: Create Issues from Security Alerts
+name: Create Issues from Dependabot Alerts
 
 on:
-  repository_vulnerability_alert:
-    types:
-      - create
-      - resolve
-      - reopen
+  push:
+    branches:
+      - 30-setup-dependabot-workflow
 
 jobs:
   create_issue:
     runs-on: ubuntu-latest
     steps:
-      
-      - name: Create issue from security alert
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Fetch Dependabot alerts
+        id: fetch_alerts
         uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const alert = context.payload.alert;
-            if (!alert) {
-              core.setFailed('No security alert found in context payload.');
-              return;
-            }
-            console.log('Security Alert:', alert);
-
-            const { affected_package_name, external_identifier, external_reference, severity, vulnerable_requirements, fixed_in } = alert;
-            const issueTitle = `Security Alert: ${affected_package_name} - ${severity}`;
-            const issueBody = `
-              A security vulnerability has been detected in the \`${affected_package_name}\` package.
-
-              **Severity**: ${severity}
-
-              **Vulnerable requirements**: ${vulnerable_requirements}
-
-              **External identifier**: ${external_identifier}
-              
-              **External reference**: ${external_reference}
-
-              **Fixed in**: ${fixed_in}
-
-              Please review and address this issue accordingly.
-            `;
-
-            console.log('Creating issue with title:', issueTitle);
-            console.log('Creating issue with body:', issueBody);
-
-            const issue = await github.rest.issues.create({
+            const alerts = await github.request('GET /repos/{owner}/{repo}/dependabot/alerts', {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: issueTitle,
-              body: issueBody
+              per_page: 100
             });
 
-            console.log('Issue created:', issue.data.html_url);
-            core.setOutput('issue_url', issue.data.html_url);
+            if (!alerts.data || alerts.data.length === 0) {
+              core.notice('No Dependabot alerts found.');
+              return;
+            }
+
+            return alerts.data.map(alert => ({
+              number: alert.number,
+              package_name: alert.security_advisory.identifier,
+              severity: alert.security_advisory.severity,
+              summary: alert.security_advisory.summary,
+              url: alert.html_url
+            }));
+
+      - name: Create issues
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const alerts = ${{ steps.fetch_alerts.outputs.result }};
+            if (!alerts || alerts.length === 0) {
+              console.log('No alerts to create issues for.');
+              return;
+            }
+
+            for (const alert of alerts) {
+              const issueTitle = `Security Alert: ${alert.package_name} - ${alert.severity}`;
+              const issueBody = `
+                A security vulnerability has been detected in the \`${alert.package_name}\` package.
+
+                **Severity**: ${alert.severity}
+
+                **Summary**: ${alert.summary}
+
+                **Details**: [View alert](${alert.url})
+
+                Please review and address this issue accordingly.
+              `;
+
+              console.log('Creating issue with title:', issueTitle);
+              console.log('Creating issue with body:', issueBody);
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody
+              });
+            }
