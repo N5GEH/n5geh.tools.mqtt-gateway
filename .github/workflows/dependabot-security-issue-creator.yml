@@ -3,7 +3,7 @@ name: Create Issues from High Severity Dependabot Alerts
 on:
   push:
     branches:
-      - 30-setup-dependabot-workflow
+      - main
 
 jobs:
   create_issues_from_alerts:
