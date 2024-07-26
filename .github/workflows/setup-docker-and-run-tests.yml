@@ -56,9 +56,7 @@ jobs:
           path: container_ip.txt
 
       - name: Create .env file for tests
-        run: |
-          cd tests
-          cp .env.tests.example .env
+        run: cp tests/.env.test.example tests/.env
 
       - name: Set up Python 3.8
         uses: actions/setup-python@v4
