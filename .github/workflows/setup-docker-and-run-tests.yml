@@ -60,6 +60,9 @@ jobs:
           pip install -r backend/api/requirements.txt
           pip install -r backend/gateway/requirements.txt
 
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
+
       - name: Run test_crud.py
         run: |
           source venv/bin/activate
