@@ -68,4 +68,9 @@ jobs:
           source venv/bin/activate
           cd tests
           python -m unittest test_crud.py
+
+      - name: Run test_forwarding.py
+        run: |
+          source venv/bin/activate
+          cd tests
           python -m unittest test_forwarding.py
