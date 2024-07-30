@@ -4,7 +4,7 @@ from typing import List, Optional, Dict
 from uuid import uuid4
 import asyncpg
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import field_validator, BaseModel, Field, ConfigDict
 from redis import asyncio as aioredis
@@ -13,7 +13,6 @@ import logging
 import re
 import time
 from settings import settings
-
 
 __version__ = "0.2.0"
 app = FastAPI()
@@ -37,6 +36,7 @@ REDIS_URL = settings.REDIS_URL
 logging.basicConfig(level=settings.LOG_LEVEL.upper(),
                     format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
+
 # Pydantic model
 class Datapoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -49,7 +49,6 @@ class Datapoint(BaseModel):
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
-    subscribe: Optional[bool] = None
 
     @field_validator('object_id')
     @classmethod
@@ -68,7 +67,6 @@ class DatapointUpdate(BaseModel):
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
-    subscribe: Optional[bool] = None
 
 
 class DatapointPartialUpdate(BaseModel):
@@ -79,7 +77,6 @@ class DatapointPartialUpdate(BaseModel):
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
-    subscribe: Optional[bool] = None
 
 
 @app.on_event("startup")
@@ -152,13 +149,14 @@ async def get_connection():
     description="Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.",
 )
 async def get_datapoints(
-    conn: asyncpg.Connection = Depends(get_connection),
-    object_id: Optional[str] = None,
-    topic: Optional[str] = None,
-    jsonpath: Optional[str] = None,
-    entity_id: Optional[str] = None,
-    entity_type: Optional[str] = None,
-    attribute_name: Optional[str] = None
+        response: Response,
+        conn: asyncpg.Connection = Depends(get_connection),
+        object_id: Optional[str] = None,
+        topic: Optional[str] = None,
+        jsonpath: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        attribute_name: Optional[str] = None
 ):
     """
     Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.
@@ -178,31 +176,30 @@ async def get_datapoints(
     query = "SELECT * FROM datapoints WHERE 1=1"
     params = []
     if object_id is not None:
-        query += f" AND object_id=${len(params)+1}"
+        query += f" AND object_id=${len(params) + 1}"
         params.append(object_id)
     if topic is not None:
-        query += f" AND topic=${len(params)+1}"
+        query += f" AND topic=${len(params) + 1}"
         params.append(topic)
     if jsonpath is not None:
-        query += f" AND jsonpath=${len(params)+1}"
+        query += f" AND jsonpath=${len(params) + 1}"
         params.append(jsonpath)
     if entity_id is not None:
-        query += f" AND entity_id=${len(params)+1}"
+        query += f" AND entity_id=${len(params) + 1}"
         params.append(entity_id)
     if entity_type is not None:
-        query += f" AND entity_type=${len(params)+1}"
+        query += f" AND entity_type=${len(params) + 1}"
         params.append(entity_type)
     if attribute_name is not None:
-        query += f" AND attribute_name=${len(params)+1}"
+        query += f" AND attribute_name=${len(params) + 1}"
         params.append(attribute_name)
     try:
         rows = await conn.fetch(query, *params)
+        datapoints = [Datapoint(**row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return datapoints
 
-    # Ensure each row includes the "subscribe" field
-    response = [{**dict(row), "subscribe": None} for row in rows]
-    return response
 @app.get(
     "/data/{object_id}",
     response_model=Datapoint,
@@ -211,7 +208,7 @@ async def get_datapoints(
                         If the datapoint is not found, an error will be raised.",
 )
 async def get_datapoint(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get a specific datapoint from the gateway. This is to allow the frontend to display a specific datapoint in the database.
@@ -230,12 +227,7 @@ async def get_datapoint(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
-
-    # Ensure each row includes the "subscribe" field
-    datapoint = {**dict(row), "subscribe": None}
-
-    return datapoint
-
+    return Datapoint(**row)
 
 @app.post(
     "/data",
@@ -248,7 +240,7 @@ async def get_datapoint(
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
 async def add_datapoint(
-    datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
+        datapoint: Datapoint, response: Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
@@ -271,11 +263,12 @@ async def add_datapoint(
     # Validate the presence of required fields if connected is True
     if datapoint.connected:
         if not datapoint.entity_id or not datapoint.entity_type or not datapoint.attribute_name:
-            raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null if connected is True")
-        
+            raise HTTPException(status_code=400,
+                                detail="entity_id, entity_type, and attribute_name cannot be null if connected is True")
+
     # Remove 'connected' field if it is set
     datapoint.connected = None
-    
+
     # Generate a new 6-character object_id if not provided
     if datapoint.object_id is None:
         while True:
@@ -315,7 +308,7 @@ async def add_datapoint(
                 datapoint.entity_type,
                 datapoint.attribute_name,
                 datapoint.description,
-                False, # Initially set connected to False
+                False,  # Initially set connected to False
             )
 
         # store the jsonpath and topic in redis for easy retrieval later
@@ -347,10 +340,14 @@ async def add_datapoint(
                 stream_name,
                 {'subscribe': datapoint.topic},
             )
+            response.headers["mqtt-subscription"] = "added"
+        else:
+            response.headers["mqtt-subscription"] = "already subscribed"
+
         # Check if the datapoint can be connected
         await check_and_update_connected(datapoint.object_id, conn)
 
-        return {**datapoint.dict(), "subscribe": subscribed is None}
+        return {**datapoint.dict()}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
@@ -367,9 +364,9 @@ async def add_datapoint(
     description="Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.",
 )
 async def update_datapoint(
-    object_id: str,
-    datapoint: DatapointUpdate,
-    conn: asyncpg.Connection = Depends(get_connection),
+        object_id: str,
+        datapoint: DatapointUpdate,
+        conn: asyncpg.Connection = Depends(get_connection),
 ):
     """
     Update a specific datapoint in the gateway. This is to allow the frontend to match a datapoint to an existing entity/attribute pair in the Context Broker.
@@ -390,15 +387,16 @@ async def update_datapoint(
     update_data = datapoint.dict(exclude_unset=True)
     if 'connected' in update_data:
         update_data.pop('connected')
-                        
+
     # Add validation to ensure entity_id, entity_type, and attribute_name are not None
     if datapoint.entity_id is None or datapoint.entity_type is None or datapoint.attribute_name is None:
-        raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null")
+        raise HTTPException(status_code=400,
+                            detail="entity_id, entity_type, and attribute_name cannot be null")
 
     try:
         # Start a transaction to ensure atomicity
         async with conn.transaction():
-            
+
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
@@ -444,9 +442,9 @@ async def update_datapoint(
     description="Partially update a specific datapoint in the gateway. This allows the frontend to update specific fields of a datapoint.",
 )
 async def partial_update_datapoint(
-    object_id: str,
-    datapoint_update: DatapointPartialUpdate,
-    conn: asyncpg.Connection = Depends(get_connection),
+        object_id: str,
+        datapoint_update: DatapointPartialUpdate,
+        conn: asyncpg.Connection = Depends(get_connection),
 ):
     existing_datapoint = await conn.fetchrow(
         """SELECT * FROM datapoints WHERE object_id=$1""", object_id
@@ -456,18 +454,20 @@ async def partial_update_datapoint(
 
     update_data = datapoint_update.dict(exclude_unset=True)
 
-    if 'entity_id' in update_data and 'attribute_name' not in update_data and existing_datapoint['attribute_name'] is None:
+    if 'entity_id' in update_data and 'attribute_name' not in update_data and \
+            existing_datapoint['attribute_name'] is None:
         raise HTTPException(
             status_code=400,
             detail="attribute_name must be set if entity_id is provided!",
         )
 
-    if 'attribute_name' in update_data and 'entity_id' not in update_data and existing_datapoint['entity_id'] is None:
+    if 'attribute_name' in update_data and 'entity_id' not in update_data and \
+            existing_datapoint['entity_id'] is None:
         raise HTTPException(
             status_code=400,
             detail="entity_id must be set if attribute_name is provided!",
         )
-    
+
     if 'connected' in update_data:
         update_data.pop('connected')
 
@@ -480,7 +480,8 @@ async def partial_update_datapoint(
     try:
         async with conn.transaction():
             # Dynamically build the SQL query to update only provided fields
-            set_clauses = ", ".join([f"{key} = ${i + 1}" for i, key in enumerate(update_data.keys())])
+            set_clauses = ", ".join(
+                [f"{key} = ${i + 1}" for i, key in enumerate(update_data.keys())])
             values = list(update_data.values()) + [object_id]
             query = f"UPDATE datapoints SET {set_clauses} WHERE object_id = ${len(values)}"
             await conn.execute(query, *values)
@@ -502,7 +503,6 @@ async def partial_update_datapoint(
                         "entity_type": updated_datapoint['entity_type'],
                         "attribute_name": updated_datapoint['attribute_name'],
                         "description": updated_datapoint['description'],
-                        "connected": updated_datapoint['connected'],
                     }
                 ),
             )
@@ -510,20 +510,7 @@ async def partial_update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
-        # Construct the response to ensure it includes all required fields
-        response_datapoint = Datapoint(
-            object_id=updated_datapoint['object_id'],
-            jsonpath=updated_datapoint['jsonpath'],
-            topic=updated_datapoint['topic'],
-            entity_id=updated_datapoint['entity_id'],
-            entity_type=updated_datapoint['entity_type'],
-            attribute_name=updated_datapoint['attribute_name'],
-            description=updated_datapoint['description'],
-            connected=updated_datapoint['connected'],
-            subscribe=None  # Adjust this as needs
-        )
-
-        return response_datapoint
+        return Datapoint(**updated_datapoint)
 
     except Exception as e:
         logging.error(str(e))
@@ -537,7 +524,7 @@ async def partial_update_datapoint(
     description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
 )
 async def delete_datapoint(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, response: Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
@@ -576,10 +563,15 @@ async def delete_datapoint(
                 stream_name,
                 {'unsubscribe': datapoint["topic"]},
             )
+            response.headers["mqtt-subscription"] = "unsubscribed"
+        else:
+            response.headers["mqtt-subscription"] = "still subscribed"
+
         return None
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 @app.delete(
     "/data",
@@ -611,10 +603,11 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
         for datapoint in datapoints:
             await app.state.redis.hdel(datapoint["topic"], datapoint["object_id"])
         return None
-    
+
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 @app.get(
     "/data/{object_id}/status",
@@ -625,7 +618,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
                 "entity/attribute pair in the Context Broker.",
 )
 async def get_match_status(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
@@ -656,7 +649,8 @@ async def get_match_status(
         async with session.get(url, headers=headers) as response:
             response_text = await response.text()
             match_status = response.status == 200
-            logging.info(f"Checking match status for entity_id: {entity_id}, attribute_name: {attribute_name}, entity_type: {entity_type}")
+            logging.info(
+                f"Checking match status for entity_id: {entity_id}, attribute_name: {attribute_name}, entity_type: {entity_type}")
             logging.info(f"Request URL: {url}")
             logging.info(f"Response status: {response.status}")
             logging.info(f"Response text: {response_text}")
@@ -670,7 +664,8 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
     """
     # Fetch the entity_id, attribute_name, and entity_type from the datapoints table
     row = await conn.fetchrow(
-        """SELECT entity_id, attribute_name, entity_type FROM datapoints WHERE object_id=$1""", object_id
+        """SELECT entity_id, attribute_name, entity_type FROM datapoints WHERE object_id=$1""",
+        object_id
     )
 
     # Check if entity_id, attribute_name, and entity_type are all present
@@ -708,11 +703,11 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
 
 
 @app.get("/system/status",
-    response_model=dict,
-    summary="Get the status of the system",
-    description="Get the status of the system. This is to allow the frontend to check "
-                "whether the system is running properly.",
-)
+         response_model=dict,
+         summary="Get the status of the system",
+         description="Get the status of the system. This is to allow the frontend to check "
+                     "whether the system is running properly.",
+         )
 async def get_status():
     checks = {
         "orion": await check_orion(),
@@ -720,7 +715,8 @@ async def get_status():
         "redis": await check_redis(),
     }
 
-    overall_status = "healthy" if all(check["status"] for check in checks.values()) else "unhealthy"
+    overall_status = "healthy" if all(
+        check["status"] for check in checks.values()) else "unhealthy"
 
     system_status = {
         "overall_status": overall_status,
@@ -728,27 +724,32 @@ async def get_status():
     }
     return system_status
 
+
 @app.get("/system/version",
          response_model=dict,
          summary="Get the version of the system and the dependencies",
          description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
-)
+         )
 async def get_version_info():
     """
     Return version information for the application and its dependencies.
     """
-    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "pydantic-settings","redis", "uvicorn"]
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "pydantic-settings",
+                    "redis", "uvicorn"]
+
     def get_dependency_version(package: str):
         """
         Get the version of a package.
         """
         return importlib.metadata.version(package)
+
     version_results = [get_dependency_version(dep) for dep in dependencies]
     version_info = {
         "application_version": __version__,
         "dependencies": dict(zip(dependencies, version_results))
     }
     return version_info
+
 
 async def check_orion():
     """
@@ -759,7 +760,7 @@ async def check_orion():
         async with aiohttp.ClientSession() as session:
             response = await session.get(f"{ORION_URL}/version")
             status = response.status == 200
-            latency = (time.time() - start_time)*1000
+            latency = (time.time() - start_time) * 1000
             return {"status": status, "latency": latency, "latency_unit": "ms",
                     "message": None if status else "Failed to connect"}
     except Exception as e:
@@ -767,6 +768,8 @@ async def check_orion():
         logging.error(f"Error checking Orion: {e}")
         return {"status": False, "latency": latency,
                 "latency_unit": "ms", "message": str(e)}
+
+
 async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
@@ -775,14 +778,16 @@ async def check_postgres():
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
-            latency = (time.time() - start_time)*1000
+            latency = (time.time() - start_time) * 1000
             return {"status": True, "latency": latency,
                     "latency_unit": "ms", "message": None}
     except Exception as e:
-        latency = (time.time() - start_time)*1000
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking PostgreSQL: {e}")
         return {"status": False, "latency": latency,
                 "latency_unit": "ms", "message": str(e)}
+
+
 async def check_redis():
     """
     Check whether the Redis cache is running properly.
@@ -790,14 +795,16 @@ async def check_redis():
     start_time = time.time()
     try:
         await app.state.redis.ping()
-        latency = (time.time() - start_time)*1000
+        latency = (time.time() - start_time) * 1000
         return {"status": True, "latency": latency,
                 "latency_unit": "ms", "message": None}
     except Exception as e:
-        latency = (time.time() - start_time)*1000
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking Redis: {e}")
         return {"status": False, "latency": latency,
                 "latency_unit": "ms", "message": str(e)}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
                 log_level=settings.LOG_LEVEL.lower())
