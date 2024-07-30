@@ -1,2 +1,4 @@
 filip~=0.2.5
-pydantic~=1.10.7
+pydantic~=2.0.1
+pydantic-settings~=2.0.1
+
