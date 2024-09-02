@@ -300,8 +300,8 @@ class TestCRUD(TestInit):
             self.assertTrue(response.ok)
 
         # test invalid ids
-        for invalid_id in invalid_ids:
-            try:
+        with self.assertRaises(pydantic.ValidationError):
+            for invalid_id in invalid_ids:
                 datapoint = Datapoint(
                     **{
                         "object_id": invalid_id,
@@ -311,9 +311,6 @@ class TestCRUD(TestInit):
                 )
                 response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
                                             data=datapoint.json())
-            except Exception as e:
-                print(f"Testing invalid_id: {invalid_id} - Expected Validation Error: {str(e)}")
-                self.assertTrue(isinstance(e, pydantic.error_wrappers.ValidationError))
 
     def test_object_id_auto_generation(self):
         headers = {
