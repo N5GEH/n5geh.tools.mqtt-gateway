@@ -42,5 +42,4 @@ def custom_serializer(obj):
 
 # Print the settings with proper serialization
 print(
-    f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2,
-                                                                default=custom_serializer)}")
+    f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2, default=custom_serializer)}")
