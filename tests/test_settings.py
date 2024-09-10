@@ -1,4 +1,5 @@
 import logging
+import json
 from dotenv import find_dotenv
 from pydantic import AnyUrl, AnyHttpUrl, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +26,7 @@ class TestSettings(BaseSettings):
 
 # create settings object
 settings = TestSettings()
-print(f"Running tests with the following settings: \n "
-      f"{settings.json(indent=2)}")
 
+# Use model_dump() to get the dic and json.dumps() to format it
+settings_dict = settings.model_dump()
+print(f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2)}")
