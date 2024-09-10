@@ -33,11 +33,9 @@ settings = TestSettings()
 settings_dict = settings.model_dump()
 
 
-# Convert non-serializable fields to strings
+# Convert everyting to a string, regardless of type
 def custom_serializer(obj):
-    if isinstance(obj, (AnyHttpUrl, str)):
-        return str(obj)
-    raise TypeError(f"Type {type(obj)} is not serializable")
+    return str(obj)
 
 
 # Print the settings with proper serialization
