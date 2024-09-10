@@ -1,0 +1,115 @@
+name: Dependabot Security Issues
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create_issues_from_alerts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Fetch Dependabot alerts
+        id: fetch_alerts
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          script: |
+            const alerts = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
+              per_page: 100
+            });
+
+            if (!alerts.data || alerts.data.length === 0) {
+              core.notice('No Dependabot alerts found.');
+              return;
+            }
+
+            core.setOutput('alerts', JSON.stringify(alerts.data.map(alert => ({
+              number: alert.number,
+              package_name: alert.security_advisory?.identifiers[0]?.value || 'dependabot issues',
+              severity: alert.security_advisory.severity,
+              summary: alert.security_advisory.summary,
+              url: alert.html_url
+            }))));
+
+      - name: Get milestone ID
+        id: get_milestone
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            const milestone = milestones.data.find(milestone => milestone.title === 'Security Issues');
+            if (!milestone) {
+              throw new Error('Milestone "security issues" not found');
+            }
+
+            core.setOutput('milestone_id', milestone.number);
+
+      - name: Check for existing issues and create new ones
+        uses: actions/github-script@v5
+        env:
+          ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
+          MILESTONE_ID: ${{ steps.get_milestone.outputs.milestone_id }}
+        with:
+          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          script: |
+            const alerts = JSON.parse(process.env.ALERTS);
+            if (!alerts || alerts.length === 0) {
+              console.log('No alerts to create issues for.');
+              return;
+            }
+
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            for (const alert of alerts) {
+              if (alert.severity.toLowerCase() !== 'high') {
+                console.log(`Skipping non-high severity alert: ${alert.package_name} - ${alert.severity}`);
+                continue;
+              }
+
+              const alertNumber = alert.url.split('/').pop();
+              const issueTitle = `Security Alert: Dependabot issue (${alertNumber}) - ${alert.severity}`;
+
+              const issueExists = existingIssues.data.some(issue => issue.title === issueTitle);
+              if (issueExists) {
+                console.log(`Issue already exists for alert ${alertNumber}. Skipping creation.`);
+                continue;
+              }
+
+              const issueBody = `A security vulnerability has been detected in the **${alert.package_name}** package.
+              
+              **Severity**: ${alert.severity}
+              **Summary**: ${alert.summary}
+              **Details**: (${alert.url})
+              
+              Please review and address this issue accordingly.
+              `;
+
+              console.log('Creating issue with title:', issueTitle);
+              console.log('Creating issue with body:', issueBody);
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['security'],
+                milestone: parseInt(process.env.MILESTONE_ID)
+              });
+
+              // Add a delay to avoid rate limit issues
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }

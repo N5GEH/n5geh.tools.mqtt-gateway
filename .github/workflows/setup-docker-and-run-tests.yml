@@ -1,0 +1,68 @@
+name: setup-docker-and-run-tests.yml
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+
+jobs:
+  setup-and-start-services:
+    name: Setup Docker and Start Services
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Fiware Environment
+        run: | 
+          cd fiware-environment
+          docker compose pull
+          docker compose up -d
+
+      - name: Create .env File
+        run: |
+          cp .env.EXAMPLE .env
+
+      - name: Build docker images
+        run: |
+          docker compose build
+          docker compose up -d
+
+      - name: Wait for service to be ready
+        run: |
+          until curl -s http://localhost:5173; do
+            echo "Waiting for service to be ready..."
+            sleep 5
+          done
+
+      - name: Create .env file for tests
+        run: cp tests/.env.test.example tests/.env
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+
+      - name: Install requirements
+        run: |
+          source venv/bin/activate
+          pip install -r tests/requirements.txt
+          pip install -r backend/api/requirements.txt
+          pip install -r backend/gateway/requirements.txt
+
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          cd tests
+          python -m unittest discover --verbose . "test_*.py"
