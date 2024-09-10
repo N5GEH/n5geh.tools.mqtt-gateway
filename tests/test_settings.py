@@ -21,12 +21,26 @@ class TestSettings(BaseSettings):
                                 alias="FIWARE_SERVICE")
     FIWARE_SERVICEPATH: str = Field(default="/",
                                     alias="FIWARE_SERVICEPATH")
-    model_config = SettingsConfigDict(env_file=find_dotenv(".env"), env_file_encoding="utf-8", case_sensitive=False, use_enum_values=True, allow_reuse=True)
+    model_config = SettingsConfigDict(env_file=find_dotenv(".env"),
+                                      env_file_encoding="utf-8", case_sensitive=False,
+                                      use_enum_values=True, allow_reuse=True)
 
 
 # create settings object
 settings = TestSettings()
 
-# Use model_dump() to get the dic and json.dumps() to format it
+# Use model_dump() to get the dictionary and convert non-serializable fields to string
 settings_dict = settings.model_dump()
-print(f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2)}")
+
+
+# Convert non-serializable fields to strings
+def custom_serializer(obj):
+    if isinstance(obj, (AnyHttpUrl, str)):
+        return str(obj)
+    raise TypeError(f"Type {type(obj)} is not serializable")
+
+
+# Print the settings with proper serialization
+print(
+    f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2,
+                                                                default=custom_serializer)}")
