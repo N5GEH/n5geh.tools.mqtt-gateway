@@ -8,5 +8,5 @@ jsonpath_ng==1.5.3
 redis==4.5.4
 aiologger==0.7.0
 aiofiles==23.1.0
-pydantic!=2.0.0
-pydantic-settings==2.0.1
+pydantic!=2.5.2
+pydantic-settings==2.5.2
