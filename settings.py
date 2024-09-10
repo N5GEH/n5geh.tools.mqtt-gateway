@@ -21,14 +21,6 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = 'INFO'  # 'critical', 'error', 'warning', 'info', 'debug'
     model_config = SettingsConfigDict(env_file=".env")
 
-    @root_validator(pre=True)
-    def validate_mqtt_credentials(cls, values):
-        if values.get("MQTT_TLS") and (
-                not values.get("MQTT_USER") or not values.get("MQTT_PASSWORD")):
-            raise ValueError(
-                "MQTT_USER and MQTT_PASSWORD must be set if MQTT_TLS is enabled.")
-        return values
-
 
 # Create an instance of the settings
 settings = Settings()
