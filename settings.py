@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     FIWARE_SERVICEPATH: str = "/"
     # Get log level from environment variable, default to INFO if not set
     LOG_LEVEL: str = 'INFO'  # 'critical', 'error', 'warning', 'info', 'debug'
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="allow"
+    )
 
 
 # Create an instance of the settings
