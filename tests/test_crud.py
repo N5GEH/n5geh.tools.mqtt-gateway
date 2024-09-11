@@ -142,7 +142,7 @@ class TestCRUD(TestInit):
         )
 
         # Attempt to update the topic and ensure it fails due to missing entity information
-        datapoint_basis1 = datapoint_basis.copy()
+        datapoint_basis1 = datapoint_basis.model_copy()
         datapoint_basis1.topic = datapoint_basis1.topic + "/updated"
         datapoint_basis1.entity_id = None  # Ensure this triggers a failure
         datapoint_basis1.entity_type = None  # Ensure this triggers a failure
@@ -158,7 +158,7 @@ class TestCRUD(TestInit):
 
         # Ensure the response indicates failure
         self.assertFalse(response1.ok)
-        self.assertEqual(response1.status_code, 400)
+        self.assertEqual(response1.status_code, 422)
         self.assertIn("entity_id, entity_type, and attribute_name cannot be null", response1.text)
 
         # Perform a valid update with correct entity information
@@ -174,7 +174,7 @@ class TestCRUD(TestInit):
         self.assertTrue(response2.ok)
 
         # Verify the update result
-        datapoint_basis2: Datapoint = datapoint_basis.copy()
+        datapoint_basis2: Datapoint = datapoint_basis.model_copy()
         datapoint_basis2.entity_id = self.test_entity.id
         datapoint_basis2.entity_type = self.test_entity.type
         datapoint_basis2.attribute_name = self.test_entity.get_attribute_names().pop()
@@ -373,7 +373,7 @@ class TestCRUD(TestInit):
                                     headers=headers,
                                     data=json.dumps(forbidden_update_data))
         self.assertFalse(response.ok)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
         # Verify that jsonpath and topic are unchanged
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)

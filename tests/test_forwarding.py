@@ -161,7 +161,7 @@ class TestForwarding(TestInit):
         object_id_1 = response.json()["object_id"]
 
         # create duplicated point 2
-        datapoint_duplicated_2 = datapoint_duplicated_1.copy()
+        datapoint_duplicated_2 = datapoint_duplicated_1.model_copy()
         datapoint_duplicated_2.attribute_name = "attr2"
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers, data=datapoint_duplicated_2.model_dump_json())
