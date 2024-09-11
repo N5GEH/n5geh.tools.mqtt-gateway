@@ -40,14 +40,14 @@ class TestForwarding(TestInit):
             **{
                 "topic": "topic/of/dp_forwarding:001",
                 "jsonpath": "$.level1.level2.level3.data1",
-                "matchDatapoint": True,
+                "connected": True,
                 "entity_id": self.test_entity.id,
                 "entity_type": self.test_entity.type,
                 "attribute_name": self.test_entity.get_attribute_names().pop()
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL +"/data", headers=headers,
-                                    data=self.matched_datapoint2.json())
+                                    data=self.matched_datapoint2.model_dump_json())
         self.value_3 = round(random.random(), 4)
         self.payload_dict3 = {
             "level1": {
@@ -81,14 +81,14 @@ class TestForwarding(TestInit):
             **{
                 "topic": "v3/airroommonitoring@ttn/devices/eui-00xxxxxxxxxxxxxxxf/up",
                 "jsonpath": "$.uplink_message.decoded_payload.bytes.channelA.value",
-                "matchDatapoint": True,
+                "connected": True,
                 "entity_id": self.arm_entity.id,
                 "entity_type": self.arm_entity.type,
                 "attribute_name": self.arm_entity.get_attribute_names().pop()
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL +"/data", headers=headers,
-                                    data=self.matched_datapoint_arm.json())
+                                    data=self.matched_datapoint_arm.model_dump_json())
 
     def test_plain_payload(self):
         # plain payload
@@ -150,21 +150,21 @@ class TestForwarding(TestInit):
             **{
                 "topic": "topic/of/dp_forwarding_duplicate:001",
                 "jsonpath": "$..duplicate_data",
-                "matchDatapoint": True,
+                "connected": True,
                 "entity_id": test_duplicate_entity.id,
                 "entity_type": test_duplicate_entity.type,
                 "attribute_name": "attr1"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_1.json())
+                                    headers=headers, data=datapoint_duplicated_1.model_dump_json())
         object_id_1 = response.json()["object_id"]
 
         # create duplicated point 2
         datapoint_duplicated_2 = datapoint_duplicated_1.copy()
         datapoint_duplicated_2.attribute_name = "attr2"
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_2.json())
+                                    headers=headers, data=datapoint_duplicated_2.model_dump_json())
         object_id_2 = response.json()["object_id"]
 
         # publish data

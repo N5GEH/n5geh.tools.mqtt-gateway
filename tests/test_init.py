@@ -55,21 +55,21 @@ class TestInit(unittest.TestCase):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.unmatched_datapoint.json())
+                                    data=self.unmatched_datapoint.model_dump_json())
         self.unmatched_object_id = response.json()["object_id"]
 
         self.matched_datapoint = Datapoint(
             **{
                 "topic": "topic/of/dp_basis:001",
                 "jsonpath": "$..data1",
-                "matchDatapoint": True,
+                "connected": True,
                 "entity_id": self.test_entity.id,
                 "entity_type": self.test_entity.type,
                 "attribute_name": self.test_entity.get_attribute_names().pop()
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint.json())
+                                    data=self.matched_datapoint.model_dump_json())
         self.matched_object_id = response.json()["object_id"]
 
         # initialize MQTT client
