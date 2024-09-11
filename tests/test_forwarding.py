@@ -46,7 +46,7 @@ class TestForwarding(TestInit):
                 "attribute_name": self.test_entity.get_attribute_names().pop()
             }
         )
-        response = requests.request("POST", settings.str(settings.GATEWAY_URL) +"/data", headers=headers,
+        response = requests.request("POST", settings.GATEWAY_URL +"/data", headers=headers,
                                     data=self.matched_datapoint2.json())
         self.value_3 = round(random.random(), 4)
         self.payload_dict3 = {
@@ -87,7 +87,7 @@ class TestForwarding(TestInit):
                 "attribute_name": self.arm_entity.get_attribute_names().pop()
             }
         )
-        response = requests.request("POST", str(settings.GATEWAY_URL) +"/data", headers=headers,
+        response = requests.request("POST", settings.GATEWAY_URL +"/data", headers=headers,
                                     data=self.matched_datapoint_arm.json())
 
     def test_plain_payload(self):
@@ -156,14 +156,14 @@ class TestForwarding(TestInit):
                 "attribute_name": "attr1"
             }
         )
-        response = requests.request("POST", str(settings.GATEWAY_URL) + "/data",
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers, data=datapoint_duplicated_1.json())
         object_id_1 = response.json()["object_id"]
 
         # create duplicated point 2
         datapoint_duplicated_2 = datapoint_duplicated_1.copy()
         datapoint_duplicated_2.attribute_name = "attr2"
-        response = requests.request("POST", str(settings.GATEWAY_URL) + "/data",
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers, data=datapoint_duplicated_2.json())
         object_id_2 = response.json()["object_id"]
 
@@ -392,7 +392,7 @@ class TestForwarding(TestInit):
         self.payload_dict1["data1"] = value_new
 
         object_id = self.matched_object_id
-        response = requests.request("DELETE", str(settings.GATEWAY_URL) + "/data/" + object_id)
+        response = requests.request("DELETE", settings.GATEWAY_URL + "/data/" + object_id)
 
         self.mqttc.publish(
             topic=self.matched_datapoint.topic,

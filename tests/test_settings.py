@@ -9,7 +9,7 @@ class TestSettings(BaseSettings):
     """
 
     """
-    GATEWAY_URL: AnyHttpUrl = Field(default="http://localhost:8000",
+    GATEWAY_URL: str = Field(default="http://localhost:8000",
                                     alias="GATEWAY_URL")
     ORION_URL: AnyHttpUrl = Field(default="http://localhost:1026",
                                   alias="ORION_URL")
