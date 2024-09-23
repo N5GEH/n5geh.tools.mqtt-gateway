@@ -21,10 +21,22 @@ export interface DatapointUpdate {
     description?: string;
 }
 
+// Define the structure for individual service checks
+interface ServiceCheck {
+    status: boolean;
+    latency: number;
+    latency_unit: string;
+    message: string | null;
+}
+
+// Adjust the SystemStatus interface to match the new response structure
 export interface SystemStatus {
-    orion: boolean;
-    postgres: boolean;
-    redis: boolean;
+    overall_status: string;
+    checks: {
+        orion: ServiceCheck;
+        postgres: ServiceCheck;
+        redis: ServiceCheck;
+    };
 }
 
 export const fetchData = async (): Promise<Datapoint[]> => {
@@ -102,6 +114,6 @@ export const getSystemStatus = async (): Promise<SystemStatus> => {
     if (!response.ok) {
         throw new Error(`Failed to get system status`);
     }
-    const responseData = await response.json();
+    const responseData: SystemStatus = await response.json();
     return responseData;
-}
+};
