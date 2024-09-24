@@ -1,8 +1,12 @@
 import json
+import time
 import requests
 import re
 import pydantic
 import logging
+from filip.clients.ngsi_v2 import ContextBrokerClient
+from filip.models import FiwareHeader
+from filip.models.ngsi_v2.context import ContextEntity
 from backend.api.main import Datapoint
 from test_settings import settings
 from tests.test_init import TestInit
@@ -239,7 +243,7 @@ class TestCRUD(TestInit):
         }
 
         # create matched datapoint
-        datapoint = Datapoint(
+        datapoint_matched = Datapoint(
             **{
                 "topic": "topic/of/match",
                 "jsonpath": "$..data_match",
@@ -250,14 +254,30 @@ class TestCRUD(TestInit):
                 "fiware_service": "default_service"
             }
         )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers, data=datapoint.json())
+        # Create a new entity and attribute to ensure they exist
+        fiware_header_1 = FiwareHeader(service=datapoint_matched.fiware_service)
+        with ContextBrokerClient(fiware_header=fiware_header_1,
+                                 url=settings.ORION_URL) as cbc:
+            attr2 = {'temperature': {'value': 0,
+                                     'type': 'Number'}}
+            self.test_entity_for_match = ContextEntity(
+                id=datapoint_matched.entity_id,
+                type=datapoint_matched.entity_type,
+                **attr2
+            )
+            cbc.post_entity(entity=self.test_entity_for_match, update=True)
+        time.sleep(1)
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=datapoint_matched.json())
         object_id = response.json()["object_id"]
         print(f"Created matched datapoint with object_id: {object_id}")
         print(f"Response for matched datapoint creation: {response.json()}")
         self.assertTrue(response.ok)
 
         # Verify entity creation in Context Broker
-        cb_headers = {'Accept': 'application/json', 'fiware-service': settings.FIWARE_SERVICE}
+        cb_headers = {'Accept': 'application/json',
+                      'fiware-service': datapoint_matched.fiware_service}
         cb_url = f"{settings.ORION_URL}/v2/entities/dp:001"
         cb_response = requests.get(cb_url, headers=cb_headers)
         print(f"Context Broker entity creation check URL: {cb_url}")
@@ -276,7 +296,7 @@ class TestCRUD(TestInit):
         self.assertTrue(status_response.json())
 
         # create non-matched datapoint
-        datapoint = Datapoint(
+        datapoint_no_matched = Datapoint(
             **{
                 "topic": "topic/of/match",
                 "jsonpath": "$..data_nomatch",
@@ -284,10 +304,12 @@ class TestCRUD(TestInit):
                 "entity_id": "NonExistentEntityID",
                 "entity_type": "NonExistentType",
                 "attribute_name": "NonExistentAttribute",
-                "fiware_service": "default_service"
+                "fiware_service": settings.FIWARE_SERVICE
             }
         )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers, data=datapoint.json())
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=datapoint_no_matched.json())
         object_id = response.json()["object_id"]
         print(f"Created non-matched datapoint with object_id: {object_id}")
         print(f"Response for non-matched datapoint creation: {response.json()}")

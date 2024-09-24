@@ -1,5 +1,7 @@
 import json
 import time
+from filip.clients.ngsi_v2 import ContextBrokerClient
+from filip.models import FiwareHeader
 from filip.models.ngsi_v2.context import ContextEntity
 from backend.api.main import Datapoint
 from test_init import TestInit
@@ -89,6 +91,48 @@ class TestForwarding(TestInit):
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
                                     data=self.matched_datapoint_arm.json())
+        if not response.ok:
+            response.raise_for_status()
+
+        # create dps with different fiware services
+        self.test_entity_custom_service = ContextEntity(
+            id="Test:custom_service",
+            type="Test",
+            attr1={'value': 0, 'type': 'Number'}
+        )
+        custom_service_1 = "custom_service_1"
+        custom_service_2 = "custom_service_2"
+        self.dp_custom_service_1 = Datapoint(
+            **{
+                "topic": "topic/of/custom/service_1",
+                "jsonpath": "$..data_custom",
+                "fiware_service": custom_service_1,
+                "entity_id": self.test_entity_custom_service.id,
+                "entity_type": self.test_entity_custom_service.type,
+                "attribute_name": self.test_entity_custom_service.get_attribute_names().pop()
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=self.dp_custom_service_1.json())
+        if not response.ok:
+            response.raise_for_status()
+
+        self.dp_custom_service_2 = Datapoint(
+            **{
+                "topic": "topic/of/custom/service_2",
+                "jsonpath": "$..data_custom",
+                "fiware_service": custom_service_2,
+                "entity_id": self.test_entity_custom_service.id,
+                "entity_type": self.test_entity_custom_service.type,
+                "attribute_name": self.test_entity_custom_service.get_attribute_names().pop()
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=self.dp_custom_service_2.json())
+        if not response.ok:
+            response.raise_for_status()
 
     def test_plain_payload(self):
         # plain payload
@@ -106,6 +150,40 @@ class TestForwarding(TestInit):
         )
         # compare
         self.assertEqual(res1, self.value_1)
+
+    def test_multi_tenancy(self):
+        def perform_test(fiware_header, dp_custom_service, value):
+            with ContextBrokerClient(fiware_header=fiware_header,
+                                     url=settings.ORION_URL) as cbc:
+                # Post the entity
+                cbc.post_entity(entity=self.test_entity_custom_service, update=True)
+                time.sleep(1)
+
+                # Send data to registered and matched datapoint via mqtt
+                payload_dict_custom = {"data_custom": value}
+                self.mqttc.publish(
+                    topic=dp_custom_service.topic,
+                    payload=json.dumps(payload_dict_custom)
+                )
+                time.sleep(1)
+
+                # Query data from CB
+                res = cbc.get_attribute_value(
+                    entity_id=dp_custom_service.entity_id,
+                    entity_type=dp_custom_service.entity_type,
+                    attr_name=dp_custom_service.attribute_name
+                )
+                return res
+
+        # Test for first Fiware service
+        fiware_header_1 = FiwareHeader(service=self.dp_custom_service_1.fiware_service)
+        res1 = perform_test(fiware_header_1, self.dp_custom_service_1, self.value_1)
+        self.assertEqual(res1, self.value_1)
+
+        # Test for second Fiware service
+        fiware_header_2 = FiwareHeader(service=self.dp_custom_service_2.fiware_service)
+        res2 = perform_test(fiware_header_2, self.dp_custom_service_2, self.value_2)
+        self.assertEqual(res2, self.value_2)
 
     def test_nested_payload(self):
         # send data to registered and matched datapoint via mqtt
