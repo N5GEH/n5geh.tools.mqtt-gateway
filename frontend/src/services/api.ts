@@ -10,6 +10,7 @@ export interface Datapoint {
     entity_type: string | null; // Can be a string or null
     attribute_name: string | null; // Can be a string or null
     connected: boolean;
+    fiware_service?: string; // Can be a string or null
     status?: string | boolean | null; // Can be a string, boolean, or null
 }
 
@@ -43,7 +44,7 @@ export const fetchData = async (): Promise<Datapoint[]> => {
     const response: Response = await fetch(`${API_URL}/data`);
     const responseData = await response.json();
     let data: Datapoint[] = await Promise.all(responseData.map(async row => {
-        row.status = await getStatus(row.object_id);
+        row.status = await getStatus(row.object_id, row.fiware_service);
         return row;
     }));
     return data;
@@ -58,7 +59,8 @@ export const addData = async (data: Datapoint) => {
     const response: Response = await fetch(`${API_URL}/data`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'FIWARE-SERVICE': data.fiware_service || '',
         },
         body: JSON.stringify(payload)
     });
@@ -100,8 +102,12 @@ export const deleteData = async (object_id: string): Promise<Datapoint | null> =
     return responseData;
 }
 
-export const getStatus = async (object_id: string): Promise<boolean> => {
-    const response: Response = await fetch(`${API_URL}/data/${object_id}/status`);
+export const getStatus = async (object_id: string, fiware_service: string): Promise<boolean> => {
+    const response: Response = await fetch(`${API_URL}/data/${object_id}/status`, {
+        headers: {
+            'fiware-service': fiware_service
+        }
+    });
     if (!response.ok) {
         throw new Error(`Failed to get status for datapoint with object_id ${object_id}`);
     }
