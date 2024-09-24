@@ -46,7 +46,8 @@ class Datapoint(BaseModel):
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = ""
     connected: Optional[bool] = None
-    fiware_service: Optional[str] = None  # Add this line
+    fiware_service: Optional[str] = Field(default=settings.FIWARE_SERVICE, min_length=1,
+                                          max_length=255)
 
     @validator('object_id')
     def validate_object_id(cls, value):
@@ -255,9 +256,8 @@ async def add_datapoint(
         UniqueViolationError: If the object_id of the datapoint already exists in the database, a 409 error will be raised.
         Exception: If some other error occurs, a 500 error will be raised.
     """
-
-    fiware_service = request.headers.get('fiware-service', settings.FIWARE_SERVICE)
-    datapoint.fiware_service = fiware_service or settings.FIWARE_SERVICE
+    if not datapoint.fiware_service:
+        datapoint.fiware_service = settings.FIWARE_SERVICE
 
     logging.info(f"Received datapoint for addition: {datapoint.json()}")
 
