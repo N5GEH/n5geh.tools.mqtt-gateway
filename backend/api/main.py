@@ -766,8 +766,7 @@ async def check_orion():
                     "message": None if status else "Failed to connect"}
     except Exception as e:
         logging.error(f"Error checking Orion: {e}")
-        return {"status": False, "latency": latency,
-                "latency_unit": "ms", "message": str(e)}
+        return {"status": False, "message": str(e)}
 async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
@@ -780,10 +779,8 @@ async def check_postgres():
             return {"status": True, "latency": latency,
                     "latency_unit": "ms", "message": None}
     except Exception as e:
-        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking PostgreSQL: {e}")
-        return {"status": False, "latency": latency,
-                "latency_unit": "ms", "message": str(e)}
+        return {"status": False, "message": str(e)}
 async def check_redis():
     """
     Check whether the Redis cache is running properly.
@@ -795,10 +792,8 @@ async def check_redis():
         return {"status": True, "latency": latency,
                 "latency_unit": "ms", "message": None}
     except Exception as e:
-        latency = (time.time() - start_time)*1000
         logging.error(f"Error checking Redis: {e}")
-        return {"status": False, "latency": latency,
-                "latency_unit": "ms", "message": str(e)}
+        return {"status": False, "message": str(e)}
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
                 log_level=settings.LOG_LEVEL.lower())
