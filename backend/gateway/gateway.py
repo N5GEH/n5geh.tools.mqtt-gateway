@@ -31,9 +31,6 @@ else:
     tls_context = None
 REDIS_URL = settings.REDIS_URL
 orion_url = settings.ORION_URL
-service = settings.FIWARE_SERVICE
-service_path = settings.FIWARE_SERVICEPATH
-
 host = settings.POSTGRES_HOST
 user = settings.POSTGRES_USER
 password = settings.POSTGRES_PASSWORD
@@ -169,6 +166,12 @@ class MqttGateway(Client):
                 json.loads(message.decode("utf-8"))
             )
             if len(parsed_result) > 0:
+                # use the fiware_service from the datapoint if it exists,
+                # otherwise use the default one
+                if datapoint["fiware_service"]:
+                    service = datapoint["fiware_service"]
+                else:
+                    service = settings.FIWARE_SERVICE
                 value = parsed_result[0].value
                 payload = {
                     datapoint["attribute_name"]: value
@@ -178,10 +181,9 @@ class MqttGateway(Client):
                     await session.patch(
                         url=f"{orion_url}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
-                        # TODO support other headers
                         headers={
                             "fiware-service": service,
-                            "fiware-servicepath": service_path,
+                            "fiware-servicepath": settings.FIWARE_SERVICEPATH,
                         },
                     )
                     logging.info(f"Sent {payload} to Orion Context Broker")
@@ -265,7 +267,7 @@ class MqttGateway(Client):
         """
         async with self.conn.transaction():
             records = await self.conn.fetch(
-                "SELECT object_id, jsonpath, entity_id, entity_type, attribute_name FROM datapoints WHERE topic = $1",
+                "SELECT object_id, jsonpath, entity_id, entity_type, attribute_name, fiware_service FROM datapoints WHERE topic = $1",
                 topic,
             )
             return [dict(record) for record in records]
