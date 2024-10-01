@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Copy requirements.txt
-COPY ./backend/gateway/requirements.txt ./
+COPY ./backend/requirements.txt ./
 
 # Copy settings.py
 COPY settings.py ./
