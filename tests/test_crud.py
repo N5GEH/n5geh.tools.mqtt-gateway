@@ -1,12 +1,17 @@
 import json
+import time
 import requests
 import re
 import pydantic
 import logging
+from filip.clients.ngsi_v2 import ContextBrokerClient
+from filip.models import FiwareHeader
+from filip.models.ngsi_v2.context import ContextEntity
 import importlib
 from backend.api.main import Datapoint, DatapointUpdate
 from test_settings import settings
 from tests.test_init import TestInit
+import importlib
 
 class TestCRUD(TestInit):
     """
@@ -77,6 +82,43 @@ class TestCRUD(TestInit):
         object_id4 = response4.json()["object_id"]
         self.assertTrue(response4.ok)
 
+    def test_create_default_fiware_service(self):
+        headers = {
+            'Accept': 'application/json',
+            'fiware-service': settings.FIWARE_SERVICE
+        }
+
+        # Create datapoint without specifying fiware_service
+        datapoint = Datapoint(
+            **{
+                "topic": "topic/of/default",
+                "jsonpath": "$..data_default"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=datapoint.json())
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json()["fiware_service"], settings.FIWARE_SERVICE)
+
+    def test_create_custom_fiware_service(self):
+        headers = {
+            'Accept': 'application/json',
+            'fiware-service': 'custom_service'
+        }
+
+        # Create datapoint with custom fiware_service
+        datapoint = Datapoint(
+            **{
+                "topic": "topic/of/custom",
+                "jsonpath": "$..data_custom",
+                "fiware_service": "custom_service"
+            }
+        )
+        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
+                                    data=datapoint.json())
+        self.assertTrue(response.ok)
+        self.assertEqual(response.json()["fiware_service"], "custom_service")
+
     def test_read(self):
         headers = {
             'Accept': 'application/json'
@@ -84,7 +126,7 @@ class TestCRUD(TestInit):
         datapoint5 = Datapoint(
             **{
                 "topic": "topic/of/crud",
-                "jsonpath": "$..data5"
+                "jsonpath": "$..dat5"
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
@@ -209,53 +251,88 @@ class TestCRUD(TestInit):
             'Accept': 'application/json'
         }
 
-        # Create matched datapoint
-        matched_datapoint = Datapoint(
+        # create matched datapoint
+        datapoint_matched = Datapoint(
             **{
                 "topic": "topic/of/match",
                 "jsonpath": "$..data_match",
                 "connected": True,
                 "entity_id": "dp:001",
                 "entity_type": "Device",
-                "attribute_name": "temperature"
+                "attribute_name": "temperature",
+                "fiware_service": "default_service"
             }
         )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=matched_datapoint.model_dump_json())
+        # Create a new entity and attribute to ensure they exist
+        fiware_header_1 = FiwareHeader(service=datapoint_matched.fiware_service)
+        with ContextBrokerClient(fiware_header=fiware_header_1,
+                                 url=settings.ORION_URL) as cbc:
+            attr2 = {'temperature': {'value': 0,
+                                     'type': 'Number'}}
+            self.test_entity_for_match = ContextEntity(
+                id=datapoint_matched.entity_id,
+                type=datapoint_matched.entity_type,
+                **attr2
+            )
+            cbc.post_entity(entity=self.test_entity_for_match, update=True)
+        time.sleep(1)
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=datapoint_matched.model_dump_json())
         object_id = response.json()["object_id"]
-        logging.info(f"Created matched datapoint with object_id: {object_id}")
-        logging.info(f"Response for matched datapoint creation: {response.json()}")
+        print(f"Created matched datapoint with object_id: {object_id}")
+        print(f"Response for matched datapoint creation: {response.json()}")
         self.assertTrue(response.ok)
 
-        # Verify match status
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
-        logging.info(f"Match status response for matched datapoint: {response.json()}")
-        self.assertTrue(response.ok)
-        self.assertTrue(response.json())
+        # Verify entity creation in Context Broker
+        cb_headers = {'Accept': 'application/json',
+                      'fiware-service': datapoint_matched.fiware_service}
+        cb_url = f"{settings.ORION_URL}/v2/entities/dp:001"
+        cb_response = requests.get(cb_url, headers=cb_headers)
+        print(f"Context Broker entity creation check URL: {cb_url}")
+        print(f"Context Broker entity creation check headers: {cb_headers}")
+        print(f"Context Broker entity creation check response: {cb_response.status_code} - {cb_response.text}")
+        self.assertTrue(cb_response.ok, "Entity creation in Context Broker failed")
 
-        # Create non-matched datapoint
-        unmatched_datapoint = Datapoint(
+        # verify match status
+        status_url = f"{settings.GATEWAY_URL}/data/{object_id}/status"
+        status_response = requests.get(status_url)
+        print(f"Match status response for matched datapoint: {status_response.json()}")
+        print(f"Status check URL: {status_url}")
+        print(f"Status check headers: {headers}")
+        print(f"Status check response: {status_response.status_code} - {status_response.text}")
+        self.assertTrue(status_response.ok)
+        self.assertTrue(status_response.json())
+
+        # create non-matched datapoint
+        datapoint_no_matched = Datapoint(
             **{
                 "topic": "topic/of/match",
                 "jsonpath": "$..data_nomatch",
                 "connected": True,
                 "entity_id": "NonExistentEntityID",
                 "entity_type": "NonExistentType",
-                "attribute_name": "NonExistentAttribute"
+                "attribute_name": "NonExistentAttribute",
+                "fiware_service": settings.FIWARE_SERVICE
             }
         )
-        response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=unmatched_datapoint.model_dump_json())
+        response = requests.request("POST", settings.GATEWAY_URL + "/data",
+                                    headers=headers,
+                                    data=datapoint_no_matched.model_dump_json())
         object_id = response.json()["object_id"]
-        logging.info(f"Created non-matched datapoint with object_id: {object_id}")
-        logging.info(f"Response for non-matched datapoint creation: {response.json()}")
+        print(f"Created non-matched datapoint with object_id: {object_id}")
+        print(f"Response for non-matched datapoint creation: {response.json()}")
         self.assertTrue(response.ok)
 
-        # Verify non-match status
-        response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id + "/status")
-        logging.info(f"Match status response for non-matched datapoint: {response.json()}")
-        self.assertTrue(response.ok)
-        self.assertFalse(response.json())
+        # verify non-match status
+        status_url = f"{settings.GATEWAY_URL}/data/{object_id}/status"
+        status_response = requests.get(status_url)
+        print(f"Match status response for non-matched datapoint: {status_response.json()}")
+        print(f"Status check URL: {status_url}")
+        print(f"Status check headers: {headers}")
+        print(f"Status check response: {status_response.status_code} - {status_response.text}")
+        self.assertTrue(status_response.ok)
+        self.assertFalse(status_response.json())
 
     def test_object_id_immutable(self):
         headers = {
@@ -341,7 +418,6 @@ class TestCRUD(TestInit):
         # verify the auto-generated object_id does not already exist
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
         self.assertTrue(response.ok)
-
 
     def test_partial_update_patch(self):
         headers = {

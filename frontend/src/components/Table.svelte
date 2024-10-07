@@ -3,7 +3,6 @@
   import { updateData, deleteData } from '../services/api';
   import { data, currentlyEditing, tempData } from '../stores/stores';
   import { refreshData } from '../services/dataService';
-
   import type { Datapoint, DatapointUpdate } from '../services/api';
 
   let localTempData: DatapointUpdate = {
@@ -24,7 +23,7 @@
   }
 
   function cancelEditing(): void {
-    // This is called when the user clicks the cancel button after editing a datapoint in the table
+    // This is called when the user clicks the cancel button after editing a datapoint in the table	
     // It resets the currentlyEditing variable and the tempData variable and cancels the edit
 
     currentlyEditing.set(null);
@@ -77,6 +76,7 @@
           <th>Entity ID</th>
           <th>Entity Type</th>
           <th>Attribute Name</th>
+          <th>FIWARE Service</th> <!-- Add this line -->
           <th>Status</th>
           <th>Actions</th>
         </tr>
@@ -94,30 +94,31 @@
               {#if $currentlyEditing === row.object_id}
                 <input bind:value={localTempData.description} />
               {:else}
-                {row.description || ''}
+                {row.description || ""}
               {/if}
             </td>
             <td>
               {#if $currentlyEditing === row.object_id}
                 <input bind:value={localTempData.entity_id} />
               {:else}
-                {row.entity_id || ''}
+                {row.entity_id || ""}
               {/if}
             </td>
             <td>
               {#if $currentlyEditing === row.object_id}
                 <input bind:value={localTempData.entity_type} />
               {:else}
-                {row.entity_type || ''}
+                {row.entity_type || ""}
               {/if}
             </td>
             <td>
               {#if $currentlyEditing === row.object_id}
                 <input bind:value={localTempData.attribute_name} />
               {:else}
-                {row.attribute_name || ''}
+                {row.attribute_name || ""}
               {/if}
             </td>
+            <td>{row.fiware_service || ""}</td> <!-- Add this line -->
             <td>{row.status ? "Match found" : "No match"}</td>
             <td>
               {#if $currentlyEditing === row.object_id}
