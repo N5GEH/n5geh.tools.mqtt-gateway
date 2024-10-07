@@ -210,7 +210,7 @@ class TestCRUD(TestInit):
 
         # Ensure the response indicates failure
         self.assertFalse(response1.ok)
-        self.assertEqual(response1.status_code, 400)
+        self.assertEqual(response1.status_code, 422)
         self.assertIn("entity_id, entity_type, and attribute_name cannot be null", response1.text)
 
         print(f"Datapoint basis: {datapoint_basis}")
