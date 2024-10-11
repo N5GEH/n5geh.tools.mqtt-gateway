@@ -189,19 +189,9 @@ class TestCRUD(TestInit):
         datapoint_basis1.entity_id = None  # Ensure this triggers a failure
         datapoint_basis1.entity_type = None  # Ensure this triggers a failure
         datapoint_basis1.attribute_name = None  # Ensure this triggers a failure
-
-        # List of forbidden fields that should not be included in the update
-        forbidden_fields = ['object_id', 'jsonpath', 'topic']
-
-        # Convert the datapoint object to a dictionary
-        update_data = datapoint_basis.model_dump()
-
-        # Remove forbidden fields from the update payload
-        update_data = {key: value for key, value in update_data.items() if key not in forbidden_fields}
-
-        # Send the update request with the filtered update data
+        update_data = datapoint_basis1.model_dump_json()
         response1 = requests.request("PUT", settings.GATEWAY_URL + "/data/" + object_id, headers=headers,
-                                     data=json.dumps(update_data))
+                                     data=update_data)
 
         # Log the request and response for debugging
         print(f"Request data for update: {update_data}")
@@ -210,12 +200,13 @@ class TestCRUD(TestInit):
 
         # Ensure the response indicates failure
         self.assertFalse(response1.ok)
-        self.assertEqual(response1.status_code, 422)
+        self.assertEqual(response1.status_code, 400)
         self.assertIn("entity_id, entity_type, and attribute_name cannot be null", response1.text)
 
-        print(f"Datapoint basis: {datapoint_basis}")
         # Perform a valid update with correct entity information
-        datapoint_basis_update = DatapointUpdate(
+        datapoint_basis_update = Datapoint(
+            jsonpath=datapoint_basis.jsonpath,
+            topic=datapoint_basis.topic,
             entity_id=self.test_entity.id,
             entity_type=self.test_entity.type,
             attribute_name=self.test_entity.get_attribute_names().pop(),

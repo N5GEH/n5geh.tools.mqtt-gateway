@@ -419,9 +419,10 @@ async def update_datapoint(
 
             # Check if the topic or jsonpath field is being updated
             if datapoint.topic != existing_datapoint['topic'] or datapoint.jsonpath != existing_datapoint['jsonpath']:
-                 raise HTTPException(status_code=422, detail="Updating the topic or jsonpath field is not allowed!")
+                raise HTTPException(status_code=422,
+                                    detail="Updating the topic or jsonpath field is not allowed!")
 
-             # Update the datapoint in the database
+            # Update the datapoint in the database
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
