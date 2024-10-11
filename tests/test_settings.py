@@ -1,40 +1,43 @@
 import logging
+import json
 from dotenv import find_dotenv
-from pydantic import AnyUrl, AnyHttpUrl, BaseSettings, Field, root_validator
+from pydantic import AnyUrl, AnyHttpUrl, Field, root_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TestSettings(BaseSettings):
     """
 
     """
-    GATEWAY_URL: AnyHttpUrl = Field(default="http://localhost:8000",
-                                    env=["GATEWAY_URL"])
+    GATEWAY_URL: str = Field(default="http://localhost:8000",
+                                    alias="GATEWAY_URL")
     ORION_URL: AnyHttpUrl = Field(default="http://localhost:1026",
-                                  env=["ORION_URL"])
+                                  alias="ORION_URL")
     MQTT_HOST: str = Field(default="localhost",
-                           env=["MQTT_HOST"])
+                           alias="MQTT_HOST")
     MQTT_PORT: int = Field(default="1883",
-                           env=["MQTT_PORT"])
+                           alias="MQTT_PORT")
     FIWARE_SERVICE: str = Field(default="gateway_test",
-                                env=["FIWARE_SERVICE"])
+                                alias="FIWARE_SERVICE")
     FIWARE_SERVICEPATH: str = Field(default="/",
-                                    env=["FIWARE_PATH",
-                                         "FIWARE_SERVICEPATH",
-                                         "FIWARE_SERVICE_PATH"])
-
-    class Config:
-        """
-        Pydantic configuration
-        """
-        env_file = find_dotenv(".env")
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        use_enum_values = True
-        allow_reuse = True
+                                    alias="FIWARE_SERVICEPATH")
+    model_config = SettingsConfigDict(env_file=find_dotenv(".env"),
+                                      env_file_encoding="utf-8", case_sensitive=False,
+                                      use_enum_values=True, allow_reuse=True)
 
 
 # create settings object
 settings = TestSettings()
-print(f"Running tests with the following settings: \n "
-      f"{settings.json(indent=2)}")
 
+# Use model_dump() to get the dictionary and convert non-serializable fields to string
+settings_dict = settings.model_dump()
+
+
+# Convert everyting to a string, regardless of type
+def custom_serializer(obj):
+    return str(obj)
+
+
+# Print the settings with proper serialization
+print(
+    f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2, default=custom_serializer)}")
