@@ -8,11 +8,10 @@ from filip.clients.ngsi_v2 import ContextBrokerClient
 from filip.models import FiwareHeader
 from filip.models.ngsi_v2.context import ContextEntity
 import importlib
-from backend.api.main import Datapoint
+from backend.api.main import Datapoint, DatapointUpdate
 from test_settings import settings
 from tests.test_init import TestInit
 import importlib
-
 
 class TestCRUD(TestInit):
     """
@@ -37,7 +36,7 @@ class TestCRUD(TestInit):
             }
         )
         response1 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint1.json())
+                                     data=datapoint1.model_dump_json())
         object_id1 = response1.json()["object_id"]
         self.assertTrue(response1.ok)
 
@@ -52,7 +51,7 @@ class TestCRUD(TestInit):
             }
         )
         response2 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint2.json())
+                                     data=datapoint2.model_dump_json())
         object_id2 = response2.json()["object_id"]
         self.assertTrue(response2.ok)
 
@@ -65,7 +64,7 @@ class TestCRUD(TestInit):
             }
         )
         response3 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint3.json())
+                                     data=datapoint3.model_dump_json())
         self.assertFalse(response3.ok)
 
         # create matched DP while left connected flag unchecked
@@ -79,7 +78,7 @@ class TestCRUD(TestInit):
             }
         )
         response4 = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                     data=datapoint4.json())
+                                     data=datapoint4.model_dump_json())
         object_id4 = response4.json()["object_id"]
         self.assertTrue(response4.ok)
 
@@ -131,15 +130,15 @@ class TestCRUD(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=datapoint5.json())
+                                    data=datapoint5.model_dump_json())
         object_id = response.json()["object_id"]
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
 
         self.assertEqual(
-            datapoint5.json(include={"topic", "jsonpath"}),
+            datapoint5.model_dump_json(include={"topic", "jsonpath"}),
             Datapoint(
                 **json.loads(response.text)
-            ).json(include={"topic", "jsonpath"})
+            ).model_dump_json(include={"topic", "jsonpath"})
         )
 
     def test_duplicated(self):
@@ -185,12 +184,12 @@ class TestCRUD(TestInit):
         )
 
         # Attempt to update the topic and ensure it fails due to missing entity information
-        datapoint_basis1 = datapoint_basis.copy()
+        datapoint_basis1 = datapoint_basis.model_copy()
         datapoint_basis1.topic = datapoint_basis1.topic + "/updated"
         datapoint_basis1.entity_id = None  # Ensure this triggers a failure
         datapoint_basis1.entity_type = None  # Ensure this triggers a failure
         datapoint_basis1.attribute_name = None  # Ensure this triggers a failure
-        update_data = datapoint_basis1.json()
+        update_data = datapoint_basis1.model_dump_json()
         response1 = requests.request("PUT", settings.GATEWAY_URL + "/data/" + object_id, headers=headers,
                                      data=update_data)
 
@@ -213,11 +212,11 @@ class TestCRUD(TestInit):
             attribute_name=self.test_entity.get_attribute_names().pop(),
         )
         response2 = requests.request("PUT", settings.GATEWAY_URL + "/data/" + object_id, headers=headers,
-                                     data=datapoint_basis_update.json())
+                                     data=datapoint_basis_update.model_dump_json())
         self.assertTrue(response2.ok)
 
         # Verify the update result
-        datapoint_basis2: Datapoint = datapoint_basis.copy()
+        datapoint_basis2: Datapoint = datapoint_basis.model_copy()
         datapoint_basis2.entity_id = self.test_entity.id
         datapoint_basis2.entity_type = self.test_entity.type
         datapoint_basis2.attribute_name = self.test_entity.get_attribute_names().pop()
@@ -270,7 +269,7 @@ class TestCRUD(TestInit):
         time.sleep(1)
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers,
-                                    data=datapoint_matched.json())
+                                    data=datapoint_matched.model_dump_json())
         object_id = response.json()["object_id"]
         print(f"Created matched datapoint with object_id: {object_id}")
         print(f"Response for matched datapoint creation: {response.json()}")
@@ -310,7 +309,7 @@ class TestCRUD(TestInit):
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers,
-                                    data=datapoint_no_matched.json())
+                                    data=datapoint_no_matched.model_dump_json())
         object_id = response.json()["object_id"]
         print(f"Created non-matched datapoint with object_id: {object_id}")
         print(f"Response for non-matched datapoint creation: {response.json()}")
@@ -339,7 +338,7 @@ class TestCRUD(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=datapoint.json())
+                                    data=datapoint.model_dump_json())
         object_id = response.json()["object_id"]
         self.assertTrue(response.ok)
 
@@ -372,7 +371,7 @@ class TestCRUD(TestInit):
                 }
             )
             response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                        data=datapoint.json())
+                                        data=datapoint.model_dump_json())
             print(f"Testing valid_id: {valid_id} - Response: {response.status_code}")
             self.assertTrue(response.ok)
 
@@ -387,7 +386,7 @@ class TestCRUD(TestInit):
                     }
                 )
                 response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                            data=datapoint.json())
+                                            data=datapoint.model_dump_json())
 
     def test_object_id_auto_generation(self):
         headers = {
@@ -402,7 +401,7 @@ class TestCRUD(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data", headers=headers,
-                                    data=datapoint.json())
+                                    data=datapoint.model_dump_json())
         self.assertTrue(response.ok)
         object_id = response.json()["object_id"]
         self.assertTrue(re.match(r'^[a-zA-Z0-9]{6}$', object_id))
@@ -450,7 +449,7 @@ class TestCRUD(TestInit):
                                     headers=headers,
                                     data=json.dumps(forbidden_update_data))
         self.assertFalse(response.ok)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
         # Verify that jsonpath and topic are unchanged
         response = requests.request("GET", settings.GATEWAY_URL + "/data/" + object_id)
@@ -482,9 +481,9 @@ class TestCRUD(TestInit):
         self.assertTrue("entity_id" in response.json())
         self.assertEqual(response.status_code, 200)
 
-        # Test case 5: Attempt to update matchDatapoint field
+        # Test case 5: Attempt to update connected field
         invalid_update_data3 = {
-            "matchDatapoint": True
+            "connected": True
         }
         response = requests.request("PATCH", settings.GATEWAY_URL + "/data/" + object_id,
                                     headers=headers,
@@ -532,7 +531,7 @@ class TestCRUD(TestInit):
         self.assertFalse(response.ok)
 
     def test_get_status(self):
-        response = requests.request("GET", settings.GATEWAY_URL+"/system/status")
+        response = requests.request("GET", settings.GATEWAY_URL +"/system/status")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("overall_status", data)
@@ -544,7 +543,7 @@ class TestCRUD(TestInit):
         self.assertEqual(data["overall_status"], "healthy")
 
     def test_get_version_info(self):
-        response = response = requests.request("GET", settings.GATEWAY_URL+"/system/version")
+        response = response = requests.request("GET", settings.GATEWAY_URL +"/system/version")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("application_version", data)
@@ -552,6 +551,7 @@ class TestCRUD(TestInit):
         dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
         for dep in dependencies:
             self.assertIn(dep, data["dependencies"])
+            print(f"{dep}")
             self.assertEqual(data["dependencies"][dep], importlib.metadata.version(dep))
 
     def test_get_datapoints_by_filters(self):
