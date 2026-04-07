@@ -13,6 +13,7 @@ import logging
 import re
 import time
 from settings import settings
+from auth import build_orion_headers
 
 __version__ = "0.2.0"
 app = FastAPI()
@@ -651,7 +652,7 @@ async def get_match_status(
         entity_type = row['entity_type']
         fiware_service = row['fiware_service']
         url = f"{ORION_URL}/v2/entities/{entity_id}/attrs/{attribute_name}/?type={entity_type}"
-        headers = {'Fiware-Service': fiware_service}
+        headers = await build_orion_headers(session, fiware_service)
         async with session.get(url, headers=headers) as response:
             response_text = await response.text()
             match_status = response.status == 200
@@ -679,9 +680,7 @@ async def check_and_update_connected(object_id: str, conn: asyncpg.Connection):
 
             # Construct the URL to query the FIWARE Context Broker
             url = f"{settings.ORION_URL}/v2/entities/{row['entity_id']}/attrs/{row['attribute_name']}?type={row['entity_type']}"
-            headers = {
-                'Fiware-Service': settings.FIWARE_SERVICE
-            }
+            headers = await build_orion_headers(session, settings.FIWARE_SERVICE)
 
             # Send a GET request to the FIWARE Context Broker
             async with session.get(url, headers=headers) as response:
@@ -759,7 +758,8 @@ async def check_orion():
     start_time = time.time()
     try:
         async with aiohttp.ClientSession() as session:
-            response = await session.get(f"{ORION_URL}/version")
+            headers = await build_orion_headers(session)
+            response = await session.get(f"{ORION_URL}/version", headers=headers)
             status = response.status == 200
             latency = (time.time() - start_time)*1000
             return {"status": status, "latency": latency, "latency_unit": "ms",
