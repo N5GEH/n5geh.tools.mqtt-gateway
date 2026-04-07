@@ -759,7 +759,7 @@ async def check_orion():
     try:
         async with aiohttp.ClientSession() as session:
             headers = await build_orion_headers(session)
-            response = await session.get(f"{ORION_URL}/version", headers=headers)
+            response = await session.get(f"{str(ORION_URL).strip("/")}/version", headers=headers)
             status = response.status == 200
             latency = (time.time() - start_time)*1000
             return {"status": status, "latency": latency, "latency_unit": "ms",
