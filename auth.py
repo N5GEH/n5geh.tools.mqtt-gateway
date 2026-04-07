@@ -85,7 +85,7 @@ async def get_bearer_token(session: aiohttp.ClientSession) -> Optional[str]:
 
 
 def _resolve_service(fiware_service: Optional[str]) -> str:
-    return fiware_service or settings.AUTH_TENANT or settings.FIWARE_SERVICE
+    return fiware_service or settings.FIWARE_SERVICE
 
 
 async def build_orion_headers(

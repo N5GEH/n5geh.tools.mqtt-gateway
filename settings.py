@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     FIWARE_SERVICEPATH: str = "/"
     # Optional auth settings for Orion access
     AUTH_ENABLED: bool = False
-    AUTH_TENANT: str = None
     AUTH_CLIENT_ID: str = None
     AUTH_CLIENT_SECRET: str = None
     AUTH_SERVER_URL: str = None
