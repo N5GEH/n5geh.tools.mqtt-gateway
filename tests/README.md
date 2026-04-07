@@ -7,15 +7,16 @@ pip install -r requirements.txt
 cd ../../backend/gateway
 pip install -r requirements.txt
 ```
-To run the protected Orion auth check:
+
+To run the protected forwarding test against a gateway configured for a protected Orion:
 ```bash
 cd ..
-python -m pytest tests/test_orion_auth.py
+python -m pytest tests/test_forwarding_auth.py
 ```
 
-Required env vars for `tests/test_orion_auth.py`:
+Required env vars for `tests/test_forwarding_auth.py`:
 - `AUTH_ENABLED=true`
-- `AUTH_SERVER_URL` (e.g., `https://sso.example.com`)
+- `AUTH_SERVER_URL`
 - `AUTH_REALM`
 - `AUTH_CLIENT_ID`
 - `AUTH_CLIENT_SECRET`
