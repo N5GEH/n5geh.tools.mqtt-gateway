@@ -1,6 +1,8 @@
 import logging
+from typing import Optional
 from dotenv import find_dotenv
-from pydantic import AnyUrl, AnyHttpUrl, BaseSettings, Field, root_validator
+from pydantic import AnyUrl, AnyHttpUrl, Field, BaseSettings
+
 
 
 class TestSettings(BaseSettings):
@@ -21,6 +23,17 @@ class TestSettings(BaseSettings):
                                     env=["FIWARE_PATH",
                                          "FIWARE_SERVICEPATH",
                                          "FIWARE_SERVICE_PATH"])
+    # Optional auth settings for protected Orion endpoints
+    AUTH_ENABLED: bool = Field(default=False,
+                               env=["AUTH_ENABLED"])
+    AUTH_CLIENT_ID: Optional[str] = Field(default=None,
+                                          env=["AUTH_CLIENT_ID"])
+    AUTH_CLIENT_SECRET: Optional[str] = Field(default=None,
+                                              env=["AUTH_CLIENT_SECRET"])
+    AUTH_SERVER_URL: Optional[AnyHttpUrl] = Field(default=None,
+                                                  env=["AUTH_SERVER_URL"])
+    AUTH_REALM: Optional[str] = Field(default=None,
+                                      env=["AUTH_REALM"])
 
     class Config:
         """
@@ -33,8 +46,13 @@ class TestSettings(BaseSettings):
         allow_reuse = True
 
 
+def _settings_json(value: BaseSettings) -> str:
+    if hasattr(value, "model_dump_json"):
+        return value.model_dump_json(indent=2)
+    return value.json(indent=2)
+
+
 # create settings object
 settings = TestSettings()
 print(f"Running tests with the following settings: \n "
-      f"{settings.json(indent=2)}")
-
+      f"{_settings_json(settings)}")
