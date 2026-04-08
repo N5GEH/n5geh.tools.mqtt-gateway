@@ -1,8 +1,7 @@
 import logging
 from typing import Optional
 from dotenv import find_dotenv
-from pydantic_settings import BaseSettings
-from pydantic import AnyUrl, AnyHttpUrl, Field
+from pydantic import AnyUrl, AnyHttpUrl, Field, BaseSettings
 
 
 
