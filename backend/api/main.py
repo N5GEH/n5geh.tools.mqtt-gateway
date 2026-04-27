@@ -436,6 +436,12 @@ async def update_datapoint(
                 """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
             )
 
+        # Fetch the complete datapoint to get fiware_service
+        complete_datapoint = await conn.fetchrow(
+            """SELECT object_id, jsonpath, entity_id, entity_type, attribute_name, description, fiware_service FROM datapoints WHERE object_id=$1""",
+            object_id
+        )
+
         await app.state.redis.hset(
             row['topic'],
             object_id,
@@ -443,10 +449,11 @@ async def update_datapoint(
                 {
                     "object_id": object_id,
                     "jsonpath": row['jsonpath'],
-                    "entity_id": update_data.get('entity_id'),
-                    "entity_type": update_data.get('entity_type'),
-                    "attribute_name": update_data.get('attribute_name'),
-                    "description": update_data.get('description'),
+                    "entity_id": complete_datapoint['entity_id'],
+                    "entity_type": complete_datapoint['entity_type'],
+                    "attribute_name": complete_datapoint['attribute_name'],
+                    "description": complete_datapoint['description'],
+                    "fiware_service": complete_datapoint['fiware_service'],
                 }
             ),
         )
@@ -530,6 +537,7 @@ async def partial_update_datapoint(
                         "entity_type": updated_datapoint['entity_type'],
                         "attribute_name": updated_datapoint['attribute_name'],
                         "description": updated_datapoint['description'],
+                        "fiware_service": updated_datapoint['fiware_service'],
                     }
                 ),
             )
