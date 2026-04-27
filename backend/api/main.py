@@ -359,7 +359,7 @@ async def add_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(datapoint.object_id, conn)
 
-        return {**datapoint.dict()}
+        return {**datapoint.model_dump()}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
