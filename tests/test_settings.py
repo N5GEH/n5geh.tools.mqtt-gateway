@@ -1,6 +1,6 @@
 from typing import Optional, Union
 from dotenv import find_dotenv
-from pydantic import AnyHttpUrl, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,9 +9,9 @@ class TestSettings(BaseSettings):
                                       env_file_encoding="utf-8",
                                       case_sensitive=False,
                                       use_enum_values=True)
-    GATEWAY_URL: AnyHttpUrl = Field(default="http://localhost:8000",
+    GATEWAY_URL: str = Field(default="http://localhost:8000",
                              alias="GATEWAY_URL")
-    ORION_URL: AnyHttpUrl = Field(default="http://localhost:1026",
+    ORION_URL: str = Field(default="http://localhost:1026",
                                   alias="ORION_URL")
     MQTT_HOST: str = Field(default="localhost",
                            alias="MQTT_HOST")
@@ -27,6 +27,7 @@ class TestSettings(BaseSettings):
     AUTH_CLIENT_SECRET: Optional[Union[str, None]] = Field(default=None)
     AUTH_SERVER_URL: Optional[Union[str, None]] = Field(default=None)
     AUTH_REALM: Optional[Union[str, None]] = Field(default=None)
+
 
 
 # create settings object
