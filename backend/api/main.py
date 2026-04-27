@@ -6,7 +6,7 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from redis import asyncio as aioredis
 import aiohttp
 import logging
@@ -50,7 +50,8 @@ class Datapoint(BaseModel):
     fiware_service: Optional[str] = Field(default=settings.FIWARE_SERVICE, min_length=1,
                                           max_length=255)
 
-    @validator('object_id')
+    @field_validator("object_id")
+    @classmethod
     def validate_object_id(cls, value):
         if value is not None:
             if not re.match(r'^[a-zA-Z0-9_\-:]+$', value):
@@ -260,7 +261,7 @@ async def add_datapoint(
     if not datapoint.fiware_service:
         datapoint.fiware_service = settings.FIWARE_SERVICE
 
-    logging.info(f"Received datapoint for addition: {datapoint.json()}")
+    logging.info(f"Received datapoint for addition: {datapoint.model_dump_json()}")
 
     # Validate the presence of required fields if connected is True
     if datapoint.connected:
@@ -349,7 +350,7 @@ async def add_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(datapoint.object_id, conn)
 
-        return {**datapoint.dict(), "subscribe": subscribed is None}
+        return {**datapoint.model_dump(), "subscribe": subscribed is None}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
@@ -386,7 +387,7 @@ async def update_datapoint(
          """
 
     # Remove 'connected' field if it is set
-    update_data = datapoint.dict(exclude_unset=True)
+    update_data = datapoint.model_dump(exclude_unset=True)
     if 'connected' in update_data:
         update_data.pop('connected')
 
@@ -443,7 +444,7 @@ async def update_datapoint(
         await check_and_update_connected(object_id, conn)
 
         # Return the updated datapoint as a dictionary
-        return {**datapoint.dict()}
+        return {**datapoint.model_dump()}
 
     except Exception as e:
         logging.error(f"Error updating datapoint: {e}")
@@ -467,7 +468,7 @@ async def partial_update_datapoint(
     if existing_datapoint is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
-    update_data = datapoint_update.dict(exclude_unset=True)
+    update_data = datapoint_update.model_dump(exclude_unset=True)
 
     if 'entity_id' in update_data and 'attribute_name' not in update_data and existing_datapoint['attribute_name'] is None:
         raise HTTPException(
