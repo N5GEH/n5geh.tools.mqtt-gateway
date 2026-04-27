@@ -25,7 +25,7 @@ class TestSettings(BaseSettings):
     AUTH_ENABLED: bool = Field(default=False,)
     AUTH_CLIENT_ID: Optional[Union[str, None]] = Field(default=None,)
     AUTH_CLIENT_SECRET: Optional[Union[str, None]] = Field(default=None)
-    AUTH_SERVER_URL: Optional[Union[AnyHttpUrl, None]] = Field(default=None)
+    AUTH_SERVER_URL: Optional[Union[str, None]] = Field(default=None)
     AUTH_REALM: Optional[Union[str, None]] = Field(default=None)
 
 
