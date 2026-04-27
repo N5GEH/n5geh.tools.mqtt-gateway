@@ -543,7 +543,7 @@ class TestCRUD(TestInit):
         self.assertEqual(data["overall_status"], "healthy")
 
     def test_get_version_info(self):
-        response = response = requests.request("GET", settings.GATEWAY_URL +"/system/version")
+        response = requests.request("GET", settings.GATEWAY_URL +"/system/version")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("application_version", data)
