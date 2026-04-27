@@ -81,6 +81,13 @@ The gateway can be configured with the following environment variables:
 - `FIWARE_SERVICE` - the FIWARE service name
 - `FIWARE_SERVICEPATH` - the FIWARE service path
 - `VITE_API_URL` - the URL to access the Gateway API from the client side (i.e., from your browser)
+- `AUTH_ENABLED` - whether the authentication is enabled
+
+Following environment variables are required if `AUTH_ENABLED` is set to `true`
+- `AUTH_CLIENT_ID` - the client ID for authentication
+- `AUTH_CLIENT_SECRET` - the client secret for authentication
+- `AUTH_SERVER_URL` - the URL of the authentication server (e.g., Keycloak
+- `AUTH_REALM` - the realm of the authentication server
 
 ## Preview
 ### Web UI

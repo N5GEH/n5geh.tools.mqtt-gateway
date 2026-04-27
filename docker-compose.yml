@@ -1,4 +1,25 @@
 version: '3.8'
+
+# Define levels for log file size limits
+x-logging-low: &logging-low
+  driver: "json-file"
+  options:
+      max-file: 5
+      max-size: 5m
+
+x-logging-medium: &logging-medium
+  driver: "json-file"
+  options:
+      max-file: 5
+      max-size: 10m
+
+x-logging-high: &logging-high
+  driver: "json-file"
+  options:
+      max-file: 5
+      max-size: 50m
+
+
 services:
   frontend:
     build:
@@ -13,7 +34,8 @@ services:
       - default
 #    volumes:
 #      - ./frontend:/dist  # for hot reloading
-    
+    logging: *logging-medium
+
   api:
     build:
       context: ./
@@ -35,6 +57,7 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
+    logging: *logging-medium
 
   gateway:
     build:
@@ -55,6 +78,7 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
+    logging: *logging-medium
 
   postgres:
     image: postgres:15.2
@@ -72,6 +96,7 @@ services:
       - POSTGRES_PASSWORD=postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
+    logging: *logging-medium
 
   pgadmin:
     image: dpage/pgadmin4:7.1
@@ -93,6 +118,7 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+    logging: *logging-medium
 
   redis:
     image: redis:7.0
@@ -109,6 +135,7 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+    logging: *logging-medium
 
 volumes:
   pgdata:

@@ -17,6 +17,7 @@ from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
 from settings import settings
+from auth import build_orion_headers
 import logging
 
 # Load configuration from JSON file
@@ -178,13 +179,11 @@ class MqttGateway(Client):
                 }
                 # Send the payload to the Orion Context Broker
                 try:
+                    headers = await build_orion_headers(session, service)
                     await session.patch(
                         url=f"{orion_url}/v2/entities/{datapoint['entity_id']}/attrs?type={datapoint['entity_type']}&options=keyValues",
                         json=payload,
-                        headers={
-                            "fiware-service": service,
-                            "fiware-servicepath": settings.FIWARE_SERVICEPATH,
-                        },
+                        headers=headers,
                     )
                     logging.info(f"Sent {payload} to Orion Context Broker")
                 except Exception as e:

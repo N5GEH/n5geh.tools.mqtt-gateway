@@ -1,16 +1,16 @@
-import logging
-import json
+from typing import Optional
 from dotenv import find_dotenv
-from pydantic import AnyUrl, AnyHttpUrl, Field, root_validator
+from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TestSettings(BaseSettings):
-    """
-
-    """
-    GATEWAY_URL: str = Field(default="http://localhost:8000",
-                                    alias="GATEWAY_URL")
+    model_config = SettingsConfigDict(env_file=find_dotenv(".env"),
+                                      env_file_encoding="utf-8",
+                                      case_sensitive=False,
+                                      use_enum_values=True)
+    GATEWAY_URL: AnyHttpUrl = Field(default="http://localhost:8000",
+                             alias="GATEWAY_URL")
     ORION_URL: AnyHttpUrl = Field(default="http://localhost:1026",
                                   alias="ORION_URL")
     MQTT_HOST: str = Field(default="localhost",
@@ -21,23 +21,15 @@ class TestSettings(BaseSettings):
                                 alias="FIWARE_SERVICE")
     FIWARE_SERVICEPATH: str = Field(default="/",
                                     alias="FIWARE_SERVICEPATH")
-    model_config = SettingsConfigDict(env_file=find_dotenv(".env"),
-                                      env_file_encoding="utf-8", case_sensitive=False,
-                                      use_enum_values=True, allow_reuse=True)
+    # Optional auth settings for protected Orion endpoints
+    AUTH_ENABLED: bool = Field(default=False,)
+    AUTH_CLIENT_ID: Optional[str] = Field(default=None,)
+    AUTH_CLIENT_SECRET: Optional[str] = Field(default=None)
+    AUTH_SERVER_URL: Optional[AnyHttpUrl] = Field(default=None)
+    AUTH_REALM: Optional[str] = Field(default=None)
 
 
 # create settings object
 settings = TestSettings()
-
-# Use model_dump() to get the dictionary and convert non-serializable fields to string
-settings_dict = settings.model_dump()
-
-
-# Convert everyting to a string, regardless of type
-def custom_serializer(obj):
-    return str(obj)
-
-
-# Print the settings with proper serialization
-print(
-    f"Running tests with the following settings: \n {json.dumps(settings_dict, indent=2, default=custom_serializer)}")
+print(f"Running tests with the following settings: \n "
+      f"{settings.model_dump_json(indent=2)}")

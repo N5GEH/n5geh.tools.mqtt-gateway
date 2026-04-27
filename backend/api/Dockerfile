@@ -13,6 +13,7 @@ COPY ./backend/api/requirements.txt ./
 
 # Copy settings.py
 COPY settings.py ./
+COPY auth.py ./
 
 # Install dependencies
 RUN pip install -r requirements.txt
