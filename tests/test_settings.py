@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from dotenv import find_dotenv
 from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,10 +23,10 @@ class TestSettings(BaseSettings):
                                     alias="FIWARE_SERVICEPATH")
     # Optional auth settings for protected Orion endpoints
     AUTH_ENABLED: bool = Field(default=False,)
-    AUTH_CLIENT_ID: Optional[str] = Field(default=None,)
-    AUTH_CLIENT_SECRET: Optional[str] = Field(default=None)
-    AUTH_SERVER_URL: Optional[AnyHttpUrl] = Field(default=None)
-    AUTH_REALM: Optional[str] = Field(default=None)
+    AUTH_CLIENT_ID: Optional[Union[str, None]] = Field(default=None,)
+    AUTH_CLIENT_SECRET: Optional[Union[str, None]] = Field(default=None)
+    AUTH_SERVER_URL: Optional[Union[AnyHttpUrl, None]] = Field(default=None)
+    AUTH_REALM: Optional[Union[str, None]] = Field(default=None)
 
 
 # create settings object
