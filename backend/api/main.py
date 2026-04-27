@@ -154,7 +154,6 @@ async def get_connection():
     description="Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.",
 )
 async def get_datapoints(
-        response: Response,
         conn: asyncpg.Connection = Depends(get_connection),
         object_id: Optional[str] = None,
         topic: Optional[str] = None,
@@ -245,7 +244,7 @@ async def get_datapoint(
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
 async def add_datapoint(
-    request: Request, response: Response, datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
+    datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
@@ -552,7 +551,7 @@ async def partial_update_datapoint(
     description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
 )
 async def delete_datapoint(
-        object_id: str, response: Response, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
