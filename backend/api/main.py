@@ -244,7 +244,7 @@ async def get_datapoint(
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
 async def add_datapoint(
-    datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
+    datapoint: Datapoint, response:Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
@@ -255,7 +255,7 @@ async def add_datapoint(
     Args:
         datapoint (Datapoint): The datapoint to be added to the gateway.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-        request (Request): The request object to get the FIWARE-Service header.
+        response (Response): The response object returned by the frontend.
 
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
@@ -559,13 +559,14 @@ async def partial_update_datapoint(
     description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
 )
 async def delete_datapoint(
-        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, response: Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
 
     Args:
         object_id (str): The object_id of the datapoint to be deleted.
+        response (Response): The response object returned by the gateway.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
