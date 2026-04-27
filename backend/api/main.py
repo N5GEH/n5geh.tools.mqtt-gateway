@@ -4,9 +4,9 @@ from typing import List, Optional
 from uuid import uuid4
 import asyncpg
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator, ConfigDict
 from redis import asyncio as aioredis
 import aiohttp
 import logging
@@ -37,8 +37,11 @@ REDIS_URL = settings.REDIS_URL
 logging.basicConfig(level=settings.LOG_LEVEL.upper(),
                     format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
+
 # Pydantic model
 class Datapoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     object_id: Optional[str] = Field(None, min_length=1, max_length=255)
     jsonpath: str
     topic: str
@@ -50,7 +53,8 @@ class Datapoint(BaseModel):
     fiware_service: Optional[str] = Field(default=settings.FIWARE_SERVICE, min_length=1,
                                           max_length=255)
 
-    @validator('object_id')
+    @field_validator('object_id')
+    @classmethod
     def validate_object_id(cls, value):
         if value is not None:
             if not re.match(r'^[a-zA-Z0-9_\-:]+$', value):
@@ -58,6 +62,8 @@ class Datapoint(BaseModel):
         return value
 
 class DatapointUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     entity_id: Optional[str] = Field(None, min_length=1, max_length=255)
     entity_type: Optional[str] = Field(None, min_length=1, max_length=255)
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -148,13 +154,13 @@ async def get_connection():
     description="Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.",
 )
 async def get_datapoints(
-    conn: asyncpg.Connection = Depends(get_connection),
-    object_id: Optional[str] = None,
-    topic: Optional[str] = None,
-    jsonpath: Optional[str] = None,
-    entity_id: Optional[str] = None,
-    entity_type: Optional[str] = None,
-    attribute_name: Optional[str] = None
+        conn: asyncpg.Connection = Depends(get_connection),
+        object_id: Optional[str] = None,
+        topic: Optional[str] = None,
+        jsonpath: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        attribute_name: Optional[str] = None
 ):
     """
     Get datapoints based on filters. This is to allow the frontend to search datapoints based on any attribute.
@@ -174,28 +180,29 @@ async def get_datapoints(
     query = "SELECT * FROM datapoints WHERE 1=1"
     params = []
     if object_id is not None:
-        query += f" AND object_id=${len(params)+1}"
+        query += f" AND object_id=${len(params) + 1}"
         params.append(object_id)
     if topic is not None:
-        query += f" AND topic=${len(params)+1}"
+        query += f" AND topic=${len(params) + 1}"
         params.append(topic)
     if jsonpath is not None:
-        query += f" AND jsonpath=${len(params)+1}"
+        query += f" AND jsonpath=${len(params) + 1}"
         params.append(jsonpath)
     if entity_id is not None:
-        query += f" AND entity_id=${len(params)+1}"
+        query += f" AND entity_id=${len(params) + 1}"
         params.append(entity_id)
     if entity_type is not None:
-        query += f" AND entity_type=${len(params)+1}"
+        query += f" AND entity_type=${len(params) + 1}"
         params.append(entity_type)
     if attribute_name is not None:
-        query += f" AND attribute_name=${len(params)+1}"
+        query += f" AND attribute_name=${len(params) + 1}"
         params.append(attribute_name)
     try:
         rows = await conn.fetch(query, *params)
+        datapoints = [Datapoint(**row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return rows
+    return datapoints
 
 @app.get(
     "/data/{object_id}",
@@ -205,7 +212,7 @@ async def get_datapoints(
                         If the datapoint is not found, an error will be raised.",
 )
 async def get_datapoint(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get a specific datapoint from the gateway. This is to allow the frontend to display a specific datapoint in the database.
@@ -224,9 +231,7 @@ async def get_datapoint(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
-    return row
-
-
+    return Datapoint(**row)
 
 @app.post(
     "/data",
@@ -239,7 +244,7 @@ async def get_datapoint(
                        database that a new datapoint has been added as well as whether the topic needs to be subscribed to.",
 )
 async def add_datapoint(
-    request: Request, datapoint: Datapoint, conn: asyncpg.Connection = Depends(get_connection)
+    datapoint: Datapoint, response:Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Add a new datapoint to the gateway. This is to allow to add new datapoints to the gateway via the frontend.
@@ -250,7 +255,7 @@ async def add_datapoint(
     Args:
         datapoint (Datapoint): The datapoint to be added to the gateway.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
-        request (Request): The request object to get the FIWARE-Service header.
+        response (Response): The response object returned by the frontend.
 
     Raises:
         HTTPException: If the datapoint is supposed to be matched but the corresponding information is not provided, a 400 error will be raised.
@@ -265,7 +270,8 @@ async def add_datapoint(
     # Validate the presence of required fields if connected is True
     if datapoint.connected:
         if not datapoint.entity_id or not datapoint.entity_type or not datapoint.attribute_name:
-            raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null if connected is True")
+            raise HTTPException(status_code=400,
+                                detail="entity_id, entity_type, and attribute_name cannot be null if connected is True")
 
     # Remove 'connected' field if it is set
     datapoint.connected = None
@@ -346,10 +352,14 @@ async def add_datapoint(
                 stream_name,
                 {'subscribe': datapoint.topic},
             )
+            response.headers["mqtt-subscription"] = "added"
+        else:
+            response.headers["mqtt-subscription"] = "already subscribed"
+
         # Check if the datapoint can be connected
         await check_and_update_connected(datapoint.object_id, conn)
 
-        return {**datapoint.dict(), "subscribe": subscribed is None}
+        return {**datapoint.model_dump()}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
@@ -386,13 +396,14 @@ async def update_datapoint(
          """
 
     # Remove 'connected' field if it is set
-    update_data = datapoint.dict(exclude_unset=True)
+    update_data = datapoint.model_dump(exclude_unset=True)
     if 'connected' in update_data:
         update_data.pop('connected')
 
     # Add validation to ensure entity_id, entity_type, and attribute_name are not None
     if datapoint.entity_id is None or datapoint.entity_type is None or datapoint.attribute_name is None:
-        raise HTTPException(status_code=400, detail="entity_id, entity_type, and attribute_name cannot be null")
+        raise HTTPException(status_code=400,
+                            detail="entity_id, entity_type, and attribute_name cannot be null")
 
     try:
         # Start a transaction to ensure atomicity
@@ -408,9 +419,10 @@ async def update_datapoint(
 
             # Check if the topic or jsonpath field is being updated
             if datapoint.topic != existing_datapoint['topic'] or datapoint.jsonpath != existing_datapoint['jsonpath']:
-                 raise HTTPException(status_code=422, detail="Updating the topic or jsonpath field is not allowed!")
+                raise HTTPException(status_code=422,
+                                    detail="Updating the topic or jsonpath field is not allowed!")
 
-             # Update the datapoint in the database
+            # Update the datapoint in the database
             await conn.execute(
                 """UPDATE datapoints SET entity_id=$1, entity_type=$2, attribute_name=$3, description=$4 WHERE object_id=$5""",
                 datapoint.entity_id,
@@ -424,6 +436,12 @@ async def update_datapoint(
                 """SELECT jsonpath, topic FROM datapoints WHERE object_id=$1""", object_id
             )
 
+        # Fetch the complete datapoint to get fiware_service
+        complete_datapoint = await conn.fetchrow(
+            """SELECT object_id, jsonpath, entity_id, entity_type, attribute_name, description, fiware_service FROM datapoints WHERE object_id=$1""",
+            object_id
+        )
+
         await app.state.redis.hset(
             row['topic'],
             object_id,
@@ -431,10 +449,11 @@ async def update_datapoint(
                 {
                     "object_id": object_id,
                     "jsonpath": row['jsonpath'],
-                    "entity_id": update_data.get('entity_id'),
-                    "entity_type": update_data.get('entity_type'),
-                    "attribute_name": update_data.get('attribute_name'),
-                    "description": update_data.get('description'),
+                    "entity_id": complete_datapoint['entity_id'],
+                    "entity_type": complete_datapoint['entity_type'],
+                    "attribute_name": complete_datapoint['attribute_name'],
+                    "description": complete_datapoint['description'],
+                    "fiware_service": complete_datapoint['fiware_service'],
                 }
             ),
         )
@@ -443,7 +462,7 @@ async def update_datapoint(
         await check_and_update_connected(object_id, conn)
 
         # Return the updated datapoint as a dictionary
-        return {**datapoint.dict()}
+        return {**datapoint.model_dump()}
 
     except Exception as e:
         logging.error(f"Error updating datapoint: {e}")
@@ -467,15 +486,17 @@ async def partial_update_datapoint(
     if existing_datapoint is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
-    update_data = datapoint_update.dict(exclude_unset=True)
+    update_data = datapoint_update.model_dump(exclude_unset=True)
 
-    if 'entity_id' in update_data and 'attribute_name' not in update_data and existing_datapoint['attribute_name'] is None:
+    if 'entity_id' in update_data and 'attribute_name' not in update_data and \
+            existing_datapoint['attribute_name'] is None:
         raise HTTPException(
             status_code=400,
             detail="attribute_name must be set if entity_id is provided!",
         )
 
-    if 'attribute_name' in update_data and 'entity_id' not in update_data and existing_datapoint['entity_id'] is None:
+    if 'attribute_name' in update_data and 'entity_id' not in update_data and \
+            existing_datapoint['entity_id'] is None:
         raise HTTPException(
             status_code=400,
             detail="entity_id must be set if attribute_name is provided!",
@@ -493,7 +514,8 @@ async def partial_update_datapoint(
     try:
         async with conn.transaction():
             # Dynamically build the SQL query to update only provided fields
-            set_clauses = ", ".join([f"{key} = ${i + 1}" for i, key in enumerate(update_data.keys())])
+            set_clauses = ", ".join(
+                [f"{key} = ${i + 1}" for i, key in enumerate(update_data.keys())])
             values = list(update_data.values()) + [object_id]
             query = f"UPDATE datapoints SET {set_clauses} WHERE object_id = ${len(values)}"
             await conn.execute(query, *values)
@@ -515,6 +537,7 @@ async def partial_update_datapoint(
                         "entity_type": updated_datapoint['entity_type'],
                         "attribute_name": updated_datapoint['attribute_name'],
                         "description": updated_datapoint['description'],
+                        "fiware_service": updated_datapoint['fiware_service'],
                     }
                 ),
             )
@@ -522,7 +545,7 @@ async def partial_update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
-        return updated_datapoint
+        return Datapoint(**updated_datapoint)
 
     except Exception as e:
         logging.error(str(e))
@@ -536,13 +559,14 @@ async def partial_update_datapoint(
     description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
 )
 async def delete_datapoint(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, response: Response, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.
 
     Args:
         object_id (str): The object_id of the datapoint to be deleted.
+        response (Response): The response object returned by the gateway.
         conn (asyncpg.Connection, optional): The connection to the database. Defaults to Depends(get_connection) which is a connection from the pool of connections to the database.
 
     Raises:
@@ -575,10 +599,15 @@ async def delete_datapoint(
                 stream_name,
                 {'unsubscribe': datapoint["topic"]},
             )
+            response.headers["mqtt-subscription"] = "unsubscribed"
+        else:
+            response.headers["mqtt-subscription"] = "still subscribed"
+
         return None
     except Exception as e:
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
+
 
 @app.delete(
     "/data",
@@ -615,6 +644,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
         logging.error(str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error!")
 
+
 @app.get(
     "/data/{object_id}/status",
     response_model=bool,
@@ -624,7 +654,7 @@ async def delete_all_datapoints(conn: asyncpg.Connection = Depends(get_connectio
                 "entity/attribute pair in the Context Broker.",
 )
 async def get_match_status(
-    object_id: str, conn: asyncpg.Connection = Depends(get_connection)
+        object_id: str, conn: asyncpg.Connection = Depends(get_connection)
 ):
     """
     Get the match status of a specific datapoint. This is to allow the frontend to check whether a datapoint is matched to an existing entity/attribute pair in the Context Broker.
@@ -721,7 +751,8 @@ async def get_status():
         "redis": await check_redis(),
     }
 
-    overall_status = "healthy" if all(check["status"] for check in checks.values()) else "unhealthy"
+    overall_status = "healthy" if all(
+        check["status"] for check in checks.values()) else "unhealthy"
 
     system_status = {
         "overall_status": overall_status,
@@ -729,27 +760,32 @@ async def get_status():
     }
     return system_status
 
+
 @app.get("/system/version",
          response_model=dict,
          summary="Get the version of the system and the dependencies",
          description="Get the version of the system. This is to allow the frontend to check the version of the system and its dependencies."
-)
+         )
 async def get_version_info():
     """
     Return version information for the application and its dependencies.
     """
-    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "redis", "uvicorn"]
+    dependencies = ["fastapi", "aiohttp", "asyncpg", "pydantic", "pydantic-settings",
+                    "redis", "uvicorn"]
+
     def get_dependency_version(package: str):
         """
         Get the version of a package.
         """
         return importlib.metadata.version(package)
+
     version_results = [get_dependency_version(dep) for dep in dependencies]
     version_info = {
         "application_version": __version__,
         "dependencies": dict(zip(dependencies, version_results))
     }
     return version_info
+
 
 async def check_orion():
     """
@@ -761,12 +797,15 @@ async def check_orion():
             headers = await build_orion_headers(session)
             response = await session.get(f"{str(ORION_URL).strip('/')}/version", headers=headers)
             status = response.status == 200
-            latency = (time.time() - start_time)*1000
+            latency = (time.time() - start_time) * 1000
             return {"status": status, "latency": latency, "latency_unit": "ms",
                     "message": None if status else "Failed to connect"}
     except Exception as e:
         logging.error(f"Error checking Orion: {e}")
-        return {"status": False, "message": str(e)}
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
+
+
 async def check_postgres():
     """
     Check whether the PostgreSQL database is running properly.
@@ -775,12 +814,16 @@ async def check_postgres():
     try:
         async with app.state.pool.acquire() as connection:
             await connection.execute("SELECT 1")
-            latency = (time.time() - start_time)*1000
+            latency = (time.time() - start_time) * 1000
             return {"status": True, "latency": latency,
                     "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking PostgreSQL: {e}")
-        return {"status": False, "message": str(e)}
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
+
+
 async def check_redis():
     """
     Check whether the Redis cache is running properly.
@@ -788,12 +831,16 @@ async def check_redis():
     start_time = time.time()
     try:
         await app.state.redis.ping()
-        latency = (time.time() - start_time)*1000
+        latency = (time.time() - start_time) * 1000
         return {"status": True, "latency": latency,
                 "latency_unit": "ms", "message": None}
     except Exception as e:
+        latency = (time.time() - start_time) * 1000
         logging.error(f"Error checking Redis: {e}")
-        return {"status": False, "message": str(e)}
+        return {"status": False, "latency": latency,
+                "latency_unit": "ms", "message": str(e)}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True,
                 log_level=settings.LOG_LEVEL.lower())
