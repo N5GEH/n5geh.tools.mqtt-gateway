@@ -396,7 +396,7 @@ async def update_datapoint(
          """
 
     # Remove 'connected' field if it is set
-    update_data = datapoint.dict(exclude_unset=True)
+    update_data = datapoint.model_dump(exclude_unset=True)
     if 'connected' in update_data:
         update_data.pop('connected')
 
@@ -462,7 +462,7 @@ async def update_datapoint(
         await check_and_update_connected(object_id, conn)
 
         # Return the updated datapoint as a dictionary
-        return {**datapoint.dict()}
+        return {**datapoint.model_dump()}
 
     except Exception as e:
         logging.error(f"Error updating datapoint: {e}")
@@ -486,7 +486,7 @@ async def partial_update_datapoint(
     if existing_datapoint is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
-    update_data = datapoint_update.dict(exclude_unset=True)
+    update_data = datapoint_update.model_dump(exclude_unset=True)
 
     if 'entity_id' in update_data and 'attribute_name' not in update_data and \
             existing_datapoint['attribute_name'] is None:
