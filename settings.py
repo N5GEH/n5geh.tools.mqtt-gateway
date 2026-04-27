@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     ORION_URL: str = "http://orion:1026"
     MQTT_HOST: str = "test.mosquitto.org"
     MQTT_PORT: int = 1883
-    MQTT_USER: str = None
-    MQTT_PASSWORD: str = None
+    MQTT_USER: Union[str, None] = None
+    MQTT_PASSWORD: Union[str, None] = None
     MQTT_TLS: bool = False
     POSTGRES_HOST: str = "localhost"
     POSTGRES_USER: str = "admin"
