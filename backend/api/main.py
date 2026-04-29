@@ -12,19 +12,11 @@ import aiohttp
 import logging
 import re
 import time
+from contextlib import asynccontextmanager
 from settings import settings
 from auth import build_orion_headers
 
 __version__ = "0.2.0"
-app = FastAPI()
-# enable CORS for the frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Change this to the frontend url
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 host = settings.POSTGRES_HOST
 user = settings.POSTGRES_USER
@@ -33,9 +25,6 @@ database = settings.POSTGRES_DB
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 ORION_URL = settings.ORION_URL
 REDIS_URL = settings.REDIS_URL
-# Configure logging
-logging.basicConfig(level=settings.LOG_LEVEL.upper(),
-                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -67,13 +56,10 @@ class DatapointUpdate(BaseModel):
     fiware_service: Optional[str] = None  # Add this line
 
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Create a pool of connections to the database. This is to ensure that the gateway does not have to create a new connection
-    to the database for every request. Instead, it can reuse an existing connection from the pool for efficiency.
-    Moreover, create a connection to the redis cache to store the subscriptions to the topics and a connection to another redis cache
-    to store the notifications to the database.
+    Create and close shared resources for the application.
     """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
     app.state.redis = await aioredis.from_url(
@@ -122,15 +108,26 @@ async def startup():
                 """ALTER TABLE datapoints ADD COLUMN fiware_service TEXT"""
             )
 
+    try:
+        yield
+    finally:
+        await app.state.pool.close()
+        await app.state.redis.close()
+        await app.state.notifier.close()
 
-@app.on_event("shutdown")
-async def shutdown():
-    """
-    Close the pool of connections to the PostgreSQL database and the connection to the redis caches.
-    """
-    await app.state.pool.close()
-    await app.state.redis.close()
-    await app.state.notifier.close()
+app = FastAPI(lifespan=lifespan)
+# enable CORS for the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Change this to the frontend url
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(level=settings.LOG_LEVEL.upper(),
+                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 
 async def get_connection():
