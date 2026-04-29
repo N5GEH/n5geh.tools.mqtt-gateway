@@ -9,8 +9,8 @@ class TestSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=find_dotenv(".env"),
         env_file_encoding="utf-8",
-        case_sensitive=False,
         use_enum_values=True,
+        extra = "ignore"
     )
 
     GATEWAY_URL: AnyHttpUrl = "http://localhost:8000"
