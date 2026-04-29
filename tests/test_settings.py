@@ -1,6 +1,6 @@
 from typing import Union
 from dotenv import find_dotenv
-from pydantic import AliasChoices, AnyHttpUrl, Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,8 +13,8 @@ class TestSettings(BaseSettings):
         extra = "ignore"
     )
 
-    GATEWAY_URL: AnyHttpUrl = "http://localhost:8000"
-    ORION_URL: AnyHttpUrl = "http://localhost:1026"
+    GATEWAY_URL: str = "http://localhost:8000"
+    ORION_URL: str = "http://localhost:1026"
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883
     FIWARE_SERVICE: str = "gateway_test"
