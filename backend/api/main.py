@@ -130,6 +130,13 @@ logging.basicConfig(level=settings.LOG_LEVEL.upper(),
                     format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 
+def record_to_dict(record: asyncpg.Record) -> dict:
+    """
+    Normalize asyncpg records to plain dicts for response models.
+    """
+    return dict(record)
+
+
 async def get_connection():
     """
     Get a connection from the pool of connections to the database. This is to ensure that the gateway does not have to create a new connection
@@ -193,7 +200,7 @@ async def get_datapoints(
         rows = await conn.fetch(query, *params)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return rows
+    return [record_to_dict(row) for row in rows]
 
 @app.get(
     "/data/{object_id}",
@@ -222,7 +229,7 @@ async def get_datapoint(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
-    return row
+    return record_to_dict(row)
 
 
 
@@ -520,7 +527,7 @@ async def partial_update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
-        return updated_datapoint
+        return record_to_dict(updated_datapoint)
 
     except Exception as e:
         logging.error(str(e))
@@ -531,7 +538,7 @@ async def partial_update_datapoint(
     "/data/{object_id}",
     status_code=204,
     summary="Delete a specific datapoint from the gateway",
-    description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
+    description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.",
 )
 async def delete_datapoint(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)
