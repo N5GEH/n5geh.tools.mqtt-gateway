@@ -9,7 +9,7 @@ from filip.models import FiwareHeader
 from filip.models.ngsi_v2.context import ContextEntity
 import importlib
 from backend.api.main import Datapoint
-from test_settings import settings
+from tests.test_settings import settings
 from tests.test_init import TestInit
 import importlib
 

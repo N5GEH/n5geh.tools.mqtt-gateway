@@ -5,7 +5,7 @@ from backend.api.main import Datapoint
 from filip.clients.ngsi_v2.cb import ContextBrokerClient
 from filip.models.ngsi_v2.context import ContextEntity
 from filip.models.base import FiwareHeader
-from test_settings import settings
+from tests.test_settings import settings
 import requests
 
 
