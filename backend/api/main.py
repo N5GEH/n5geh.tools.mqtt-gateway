@@ -6,25 +6,17 @@ import asyncpg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from redis import asyncio as aioredis
 import aiohttp
 import logging
 import re
 import time
+from contextlib import asynccontextmanager
 from settings import settings
 from auth import build_orion_headers
 
 __version__ = "0.2.0"
-app = FastAPI()
-# enable CORS for the frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Change this to the frontend url
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 host = settings.POSTGRES_HOST
 user = settings.POSTGRES_USER
@@ -33,9 +25,6 @@ database = settings.POSTGRES_DB
 DATABASE_URL = f"postgresql://{user}:{password}@{host}/{database}"
 ORION_URL = settings.ORION_URL
 REDIS_URL = settings.REDIS_URL
-# Configure logging
-logging.basicConfig(level=settings.LOG_LEVEL.upper(),
-                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 # Pydantic model
 class Datapoint(BaseModel):
@@ -50,7 +39,8 @@ class Datapoint(BaseModel):
     fiware_service: Optional[str] = Field(default=settings.FIWARE_SERVICE, min_length=1,
                                           max_length=255)
 
-    @validator('object_id')
+    @field_validator("object_id")
+    @classmethod
     def validate_object_id(cls, value):
         if value is not None:
             if not re.match(r'^[a-zA-Z0-9_\-:]+$', value):
@@ -66,13 +56,10 @@ class DatapointUpdate(BaseModel):
     fiware_service: Optional[str] = None  # Add this line
 
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Create a pool of connections to the database. This is to ensure that the gateway does not have to create a new connection
-    to the database for every request. Instead, it can reuse an existing connection from the pool for efficiency.
-    Moreover, create a connection to the redis cache to store the subscriptions to the topics and a connection to another redis cache
-    to store the notifications to the database.
+    Create and close shared resources for the application.
     """
     app.state.pool = await asyncpg.create_pool(DATABASE_URL)
     app.state.redis = await aioredis.from_url(
@@ -121,15 +108,33 @@ async def startup():
                 """ALTER TABLE datapoints ADD COLUMN fiware_service TEXT"""
             )
 
+    try:
+        yield
+    finally:
+        await app.state.pool.close()
+        await app.state.redis.close()
+        await app.state.notifier.close()
 
-@app.on_event("shutdown")
-async def shutdown():
+app = FastAPI(lifespan=lifespan)
+# enable CORS for the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Change this to the frontend url
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(level=settings.LOG_LEVEL.upper(),
+                    format='%(asctime)s %(name)s %(levelname)s: %(message)s')
+
+
+def record_to_dict(record: asyncpg.Record) -> dict:
     """
-    Close the pool of connections to the PostgreSQL database and the connection to the redis caches.
+    Normalize asyncpg records to plain dicts for response models.
     """
-    await app.state.pool.close()
-    await app.state.redis.close()
-    await app.state.notifier.close()
+    return dict(record)
 
 
 async def get_connection():
@@ -195,7 +200,7 @@ async def get_datapoints(
         rows = await conn.fetch(query, *params)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return rows
+    return [record_to_dict(row) for row in rows]
 
 @app.get(
     "/data/{object_id}",
@@ -224,7 +229,7 @@ async def get_datapoint(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Device not found!")
-    return row
+    return record_to_dict(row)
 
 
 
@@ -260,7 +265,7 @@ async def add_datapoint(
     if not datapoint.fiware_service:
         datapoint.fiware_service = settings.FIWARE_SERVICE
 
-    logging.info(f"Received datapoint for addition: {datapoint.json()}")
+    logging.info(f"Received datapoint for addition: {datapoint.model_dump_json()}")
 
     # Validate the presence of required fields if connected is True
     if datapoint.connected:
@@ -349,7 +354,7 @@ async def add_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(datapoint.object_id, conn)
 
-        return {**datapoint.dict(), "subscribe": subscribed is None}
+        return {**datapoint.model_dump(), "subscribe": subscribed is None}
 
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=409, detail="Device already exists!")
@@ -386,7 +391,7 @@ async def update_datapoint(
          """
 
     # Remove 'connected' field if it is set
-    update_data = datapoint.dict(exclude_unset=True)
+    update_data = datapoint.model_dump(exclude_unset=True)
     if 'connected' in update_data:
         update_data.pop('connected')
 
@@ -443,7 +448,7 @@ async def update_datapoint(
         await check_and_update_connected(object_id, conn)
 
         # Return the updated datapoint as a dictionary
-        return {**datapoint.dict()}
+        return {**datapoint.model_dump()}
 
     except Exception as e:
         logging.error(f"Error updating datapoint: {e}")
@@ -467,7 +472,7 @@ async def partial_update_datapoint(
     if existing_datapoint is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
-    update_data = datapoint_update.dict(exclude_unset=True)
+    update_data = datapoint_update.model_dump(exclude_unset=True)
 
     if 'entity_id' in update_data and 'attribute_name' not in update_data and existing_datapoint['attribute_name'] is None:
         raise HTTPException(
@@ -522,7 +527,7 @@ async def partial_update_datapoint(
         # Check if the datapoint can be connected
         await check_and_update_connected(object_id, conn)
 
-        return updated_datapoint
+        return record_to_dict(updated_datapoint)
 
     except Exception as e:
         logging.error(str(e))
@@ -533,7 +538,7 @@ async def partial_update_datapoint(
     "/data/{object_id}",
     status_code=204,
     summary="Delete a specific datapoint from the gateway",
-    description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway.",
+    description="Delete a specific datapoint from the gateway. This is to allow the frontend to delete a datapoint from the gateway and unsubscribe from the topic if it is the last subscriber.",
 )
 async def delete_datapoint(
     object_id: str, conn: asyncpg.Connection = Depends(get_connection)

@@ -49,7 +49,7 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint2.json())
+                                    data=self.matched_datapoint2.model_dump_json())
         self.value_3 = round(random.random(), 4)
         self.payload_dict3 = {
             "level1": {
@@ -90,7 +90,7 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL+"/data", headers=headers,
-                                    data=self.matched_datapoint_arm.json())
+                                    data=self.matched_datapoint_arm.model_dump_json())
         if not response.ok:
             response.raise_for_status()
 
@@ -114,7 +114,7 @@ class TestForwarding(TestInit):
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers,
-                                    data=self.dp_custom_service_1.json())
+                                    data=self.dp_custom_service_1.model_dump_json())
         if not response.ok:
             response.raise_for_status()
 
@@ -130,7 +130,7 @@ class TestForwarding(TestInit):
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
                                     headers=headers,
-                                    data=self.dp_custom_service_2.json())
+                                    data=self.dp_custom_service_2.model_dump_json())
         if not response.ok:
             response.raise_for_status()
 
@@ -235,14 +235,14 @@ class TestForwarding(TestInit):
             }
         )
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_1.json())
+                                    headers=headers, data=datapoint_duplicated_1.model_dump_json())
         object_id_1 = response.json()["object_id"]
 
         # create duplicated point 2
-        datapoint_duplicated_2 = datapoint_duplicated_1.copy()
+        datapoint_duplicated_2 = datapoint_duplicated_1.model_copy()
         datapoint_duplicated_2.attribute_name = "attr2"
         response = requests.request("POST", settings.GATEWAY_URL + "/data",
-                                    headers=headers, data=datapoint_duplicated_2.json())
+                                    headers=headers, data=datapoint_duplicated_2.model_dump_json())
         object_id_2 = response.json()["object_id"]
 
         # publish data
