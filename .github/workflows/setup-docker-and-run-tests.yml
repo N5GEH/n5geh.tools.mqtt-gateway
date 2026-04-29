@@ -42,7 +42,7 @@ jobs:
       - name: Create .env file for tests
         run: cp tests/.env.test.example tests/.env
 
-      - name: Set up Python 3.8
+      - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
