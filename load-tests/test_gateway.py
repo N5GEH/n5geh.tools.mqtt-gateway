@@ -103,10 +103,10 @@ async def receive_mqtt_notification(listener_id: int) -> None:
         await client.subscribe(f"test/timestamp/{listener_id}")
         async for message in client.messages:
             latency = await asyncio.get_running_loop().run_in_executor(process_executor, process_message, message)
-                async with lock:
-                    messages_received[stage] += 1
-                latencies[stage].append(latency)
-                print(f"Received message {messages_received[stage]}")
+            async with lock:
+                messages_received[stage] += 1
+            latencies[stage].append(latency)
+            print(f"Received message {messages_received[stage]}")
 
 
 async def generate_client() -> None:
