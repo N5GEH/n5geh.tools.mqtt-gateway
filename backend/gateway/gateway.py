@@ -12,7 +12,7 @@ import async_timeout
 import asyncpg
 from aiologger import Logger
 from aiologger.handlers.files import AsyncFileHandler
-from asyncio_mqtt import Client, MqttError
+from aiomqtt import Client, MqttError
 from jsonpath_ng import parse
 from redis import asyncio as aioredis
 from uuid import uuid4
@@ -43,7 +43,7 @@ logging.basicConfig(level=settings.LOG_LEVEL.upper(),
                     format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 
 
-class MqttGateway(Client):
+class MqttGateway:
     """
     This class implements the MQTT IoT Gateway.
     This implementation is asynchronous and uses the MQTTv5 protocol.
@@ -55,8 +55,6 @@ class MqttGateway(Client):
     """
 
     def __init__(self):
-        super().__init__(hostname=MQTT_HOST)
-        # Create gateway device
         self.mqtt_queue = asyncio.Queue()
         self.redis_queue = asyncio.Queue()
         self.workers = []  # List of worker tasks
@@ -201,7 +199,7 @@ class MqttGateway(Client):
         This is important because the callback function can take a long time to execute, for example if it needs to query the database.
 
         Args:
-            client (Client): The MQTT client used by the gateway. The Client object is from the asyncio_mqtt library.
+            client (Client): The MQTT client used by the gateway. The Client object is from the aiomqtt library.
         """
         logging.info("Listening to MQTT...")
         topics = await self.get_unique_topics()
@@ -209,12 +207,11 @@ class MqttGateway(Client):
         for topic in topics:
             await client.subscribe(topic)
             logging.info(f"Subscribed to topic {topic}")
-        async with client.messages() as messages:
-            async for message in messages:
-                logging.info(f"Receive data {message.payload} from topic {message.topic}")
-                self.mqtt_queue.put_nowait(
-                    ((str(message.topic), message.payload))
-                )
+        async for message in client.messages:
+            logging.info(f"Receive data {message.payload} from topic {message.topic}")
+            self.mqtt_queue.put_nowait(
+                ((str(message.topic), message.payload))
+            )
 
     async def redis_listener(self) -> None:
         """
@@ -322,6 +319,5 @@ class MqttGateway(Client):
 
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
     gateway = MqttGateway()
     asyncio.run(gateway.run())

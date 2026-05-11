@@ -1,6 +1,6 @@
 import unittest
 from filip.utils.cleanup import clear_context_broker
-from paho.mqtt.client import Client, MQTTv5
+from paho.mqtt.client import Client, MQTTv5, CallbackAPIVersion
 from backend.api.main import Datapoint
 from filip.clients.ngsi_v2.cb import ContextBrokerClient
 from filip.models.ngsi_v2.context import ContextEntity
@@ -63,7 +63,7 @@ class TestInit(unittest.TestCase):
         self.matched_object_id = response.json()["object_id"]
 
         # initialize MQTT client
-        self.mqttc = Client(protocol=MQTTv5)
+        self.mqttc = Client(CallbackAPIVersion.VERSION2, protocol=MQTTv5)
         self.mqttc.connect(
             host=settings.MQTT_HOST,
             port=settings.MQTT_PORT
