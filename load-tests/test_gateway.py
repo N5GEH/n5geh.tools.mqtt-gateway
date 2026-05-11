@@ -5,7 +5,6 @@ from collections import defaultdict
 from uuid import uuid4
 
 import aiohttp
-import aiomqtt
 from aiomqtt import Client as MQTTClient
 from dateutil.parser import parse
 from filip.models.base import FiwareHeader

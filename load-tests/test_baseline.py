@@ -4,7 +4,6 @@ import sys
 from collections import defaultdict
 
 import aiohttp
-import aiomqtt
 from aiomqtt import Client as MQTTClient
 from dateutil.parser import parse
 from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
