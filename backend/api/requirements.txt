@@ -1,6 +1,6 @@
 asyncpg==0.29.0
 fastapi==0.128.4
-aiohttp>=3.9.0
+aiohttp~=3.9.0
 pydantic>=2.6.0,<2.9.0
 pydantic-settings>=2.0.0,<2.3.0
 redis==4.5.4
