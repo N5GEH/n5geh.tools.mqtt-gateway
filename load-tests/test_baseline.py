@@ -4,10 +4,7 @@ import sys
 from collections import defaultdict
 
 import aiohttp
-import asyncio_mqtt
-from aiologger import Logger
-from aiologger.handlers.files import AsyncFileHandler
-from asyncio_mqtt import Client as MQTTClient
+from aiomqtt import Client as MQTTClient
 from dateutil.parser import parse
 from filip.clients.ngsi_v2 import ContextBrokerClient, IoTAClient
 from filip.models.base import FiwareHeader
@@ -62,13 +59,12 @@ def process_message(message):
 async def receive_mqtt_notification(listener_id: int) -> None:
     async with MQTTClient(MQTT_HOSTNAME, keepalive=60000) as client:
         await client.subscribe(f"test/timestamp/{listener_id}")
-        async with client.messages() as messages:
-            async for message in messages:
-                latency = await asyncio.get_running_loop().run_in_executor(process_executor, process_message, message)
-                async with lock:
-                    messages_received[stage] += 1
-                latencies[stage].append(latency)
-                print(f"Received message {messages_received[stage]}")
+        async for message in client.messages:
+            latency = await asyncio.get_running_loop().run_in_executor(process_executor, process_message, message)
+            async with lock:
+                messages_received[stage] += 1
+            latencies[stage].append(latency)
+            print(f"Received message {messages_received[stage]}")
 
 
 async def generate_client() -> None:
@@ -109,7 +105,6 @@ async def generate_client() -> None:
     # start the client
     try:
         async with MQTTClient(MQTT_HOSTNAME, client_id=device_id, keepalive=60000) as client:
-            await client.connect()
             while True:
                 await generate_messages.wait()
                 await client.publish(

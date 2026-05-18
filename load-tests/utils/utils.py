@@ -12,7 +12,7 @@ from typing import Union, Tuple
 import pickle
 
 import aiohttp
-from asyncio_mqtt import Client as MQTTClient
+from aiomqtt import Client as MQTTClient
 
 TEST_ENV = os.environ.get("TEST_ENV", "gateway1x")
 HOST_URL = "137.226.248.161"
@@ -170,7 +170,6 @@ async def generate_client(
     try:
         async with MQTTClient(mqtt_hostname) as client:
             await event.wait()
-            await client.connect()
             while True:
                 if TEST_ENV == "baseline":
                     await client.publish("test/latency", await generate_payload())

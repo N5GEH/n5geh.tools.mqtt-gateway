@@ -1,8 +1,7 @@
-aiohttp==3.8.4
+aiohttp~=3.9.0
 aiologger==0.7.0
-asyncio-mqtt==0.16.1
+aiomqtt==2.5.1
 async_timeout
-paho-mqtt<2.0
 asyncpg==0.29.0
 jsonpath_ng==1.5.3
 redis==4.5.4
