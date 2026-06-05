@@ -43,7 +43,7 @@ export interface SystemStatus {
 export const fetchData = async (): Promise<Datapoint[]> => {
     const response: Response = await fetch(`${API_URL}/data`);
     const responseData = await response.json();
-    let data: Datapoint[] = await Promise.all(responseData.map(async row => {
+        let data: Datapoint[] = await Promise.all(responseData.map(async (row: any) => {
         row.status = await getStatus(row.object_id, row.fiware_service);
         return row;
     }));

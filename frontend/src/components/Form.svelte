@@ -8,13 +8,13 @@
   import { refreshData } from '../services/dataService';
 
   let formState: Partial<Datapoint> = $state({
-    object_id: null,
+    object_id: undefined,
     jsonpath: '',
     topic: '',
     description: '',
-    entity_id: null,
-    entity_type: null,
-    attribute_name: null,
+    entity_id: undefined,
+    entity_type: undefined,
+    attribute_name: undefined,
     connected: false,
     fiware_service: '',
   });
@@ -32,17 +32,19 @@
       formState.fiware_service = ''; // Clear fiware_service if multi-tenancy is not enabled
     }
     try {
-      await addData($newDatapoint);
+      const dp = $newDatapoint;
+      if (!dp) return;
+      await addData(dp);
       await refreshData(); // Refresh the data after adding a new datapoint
       // Reset formState after successful addition
       formState = {
-        object_id: null,
+        object_id: undefined,
         jsonpath: '',
         topic: '',
         description: '',
-        entity_id: null,
-        entity_type: null,
-        attribute_name: null,
+        entity_id: undefined,
+        entity_type: undefined,
+        attribute_name: undefined,
         connected: false,
         fiware_service: '',
       };

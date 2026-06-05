@@ -17,8 +17,14 @@
   // This is called when the user clicks the edit button in the table	currentlyEditing.set(datapoint.object_id);
   // It sets the currentlyEditing variable to the object_id of the datapoint that is being edited and stores a copy of the datapoint in tempData
 
-    currentlyEditing.set(datapoint.object_id);
-    localTempData = { ...datapoint }; // Make a copy of the datapoint for editing
+    currentlyEditing.set(datapoint.object_id ?? null);
+    localTempData = {
+      object_id: datapoint.object_id ?? '',
+      description: datapoint.description ?? undefined,
+      entity_id: datapoint.entity_id ?? undefined,
+      entity_type: datapoint.entity_type ?? undefined,
+      attribute_name: datapoint.attribute_name ?? undefined,
+    }; // Make a copy of the datapoint for editing
     console.log('Editing data:', localTempData);
   }
 
@@ -128,7 +134,7 @@
               <button on:click={cancelEditing}>Cancel</button>
             {:else}
               <button on:click={() => editData(row)}>Configure</button>
-              <button on:click={() => handleDelete(row.object_id)}>Delete</button>
+              <button on:click={() => handleDelete(row.object_id ?? '')}>Delete</button>
             {/if}
           </td>
         </tr>
