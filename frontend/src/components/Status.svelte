@@ -16,16 +16,14 @@
 </script>
 
 
-<html lang="en">
-    <div class="status">
-        <p>Services status:</p>
-        {#if systemStatus}
-            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.orion.status ? 'green' : 'red'}"></span>Orion</p>
-            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.postgres.status ? 'green' : 'red'}"></span>Postgres</p>
-            <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.redis.status ? 'green' : 'red'}"></span>Redis</p>
-        {:else}
-            <p class="status-error">Checking...</p>
-        {/if}
-    </div>
-</html>
+<div class="status">
+  <p>Services status:</p>
+  {#if systemStatus}
+      <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.orion.status ? 'green' : 'red'}"></span>Orion</p>
+      <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.postgres.status ? 'green' : 'red'}"></span>Postgres</p>
+      <p class="status-ok"><span class="circle" style="background-color:{systemStatus.checks.redis.status ? 'green' : 'red'}"></span>Redis</p>
+  {:else}
+      <p class="status-error">Checking...</p>
+  {/if}
+</div>
       

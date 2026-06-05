@@ -1,11 +1,13 @@
 <!-- Form.svelte -->
 <script lang="ts">
+  import { run, preventDefault } from 'svelte/legacy';
+
   import { newDatapoint } from '../stores/stores';
   import type { Datapoint } from '../services/api';
   import { addData } from '../services/api';
   import { refreshData } from '../services/dataService';
 
-  let formState: Partial<Datapoint> = {
+  let formState: Partial<Datapoint> = $state({
     object_id: null,
     jsonpath: '',
     topic: '',
@@ -15,12 +17,14 @@
     attribute_name: null,
     connected: false,
     fiware_service: '',
-  };
+  });
 
-  let isMultiTenancy = false; // New state for multi-tenancy checkbox
+  let isMultiTenancy = $state(false); // New state for multi-tenancy checkbox
 
   // Reactive statement that updates whenever formState changes
-  $: newDatapoint.set(formState as Datapoint);
+  run(() => {
+    newDatapoint.set(formState as Datapoint);
+  });
 
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
@@ -49,7 +53,7 @@
   };
 </script>
 
-<form on:submit|preventDefault={handleSubmit}>
+<form onsubmit={preventDefault(handleSubmit)}>
   <!-- Input field for object_id -->
   <label for="object_id">Object ID</label>
   <input type="text" id="object_id" bind:value={formState.object_id} />
