@@ -20,6 +20,7 @@ export interface DatapointUpdate {
     entity_type?: string;
     attribute_name?: string;
     description?: string;
+    fiware_service?: string;
 }
 
 interface ServiceCheck {

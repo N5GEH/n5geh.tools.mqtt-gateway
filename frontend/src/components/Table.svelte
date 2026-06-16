@@ -10,7 +10,8 @@
     description: '',
     entity_id: '',
     entity_type: '',
-    attribute_name: ''
+    attribute_name: '',
+    fiware_service: '',
   };
 
   function editData(datapoint: Datapoint): void {
@@ -24,6 +25,7 @@
       entity_id: datapoint.entity_id ?? undefined,
       entity_type: datapoint.entity_type ?? undefined,
       attribute_name: datapoint.attribute_name ?? undefined,
+      fiware_service: datapoint.fiware_service ?? undefined,
     }; // Make a copy of the datapoint for editing
     console.log('Editing data:', localTempData);
   }
@@ -38,7 +40,8 @@
       description: '',
       entity_id: '',
       entity_type: '',
-      attribute_name: ''
+      attribute_name: '',
+      fiware_service: '',
     }; // Reset localTempData
     console.log('Cancelled editing.');
   }
@@ -123,7 +126,13 @@
               {row.attribute_name || ""}
             {/if}
           </td>
-          <td>{row.fiware_service || ""}</td> <!-- Add this line -->
+          <td>
+            {#if $currentlyEditing === row.object_id}
+              <input bind:value={localTempData.fiware_service} />
+            {:else}
+              {row.fiware_service || ""}
+            {/if}
+          </td>
           <td>{row.status ? "Match found" : "No match"}</td>
           <td>
             {#if $currentlyEditing === row.object_id}
