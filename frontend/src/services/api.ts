@@ -22,7 +22,6 @@ export interface DatapointUpdate {
     description?: string;
 }
 
-// Define the structure for individual service checks
 interface ServiceCheck {
     status: boolean;
     latency: number;
@@ -30,7 +29,6 @@ interface ServiceCheck {
     message: string | null;
 }
 
-// Adjust the SystemStatus interface to match the new response structure
 export interface SystemStatus {
     overall_status: string;
     checks: {
@@ -51,9 +49,7 @@ export const fetchData = async (): Promise<Datapoint[]> => {
 };
 
 export const addData = async (data: Datapoint) => {
-    // Destructure the object to separate object_id
     const { object_id, ...dataWithoutObjectId } = data;
-    // Create the payload conditionally including object_id
     const payload = object_id ? data : dataWithoutObjectId;
 
     const response: Response = await fetch(`${API_URL}/data`, {
@@ -64,35 +60,36 @@ export const addData = async (data: Datapoint) => {
         },
         body: JSON.stringify(payload)
     });
-    
+
     if (!response.ok) {
         throw new Error(`Failed to add data: ${response.statusText}`);
     }
-    
+
     const responseData = await response.json();
     return responseData;
 };
 
 export const updateData = async (data: DatapointUpdate) => {
-    const response: Response = await fetch(`${API_URL}/data/${data.object_id}`, {
-        method: 'PUT',
+    const { object_id, ...updateFields } = data;
+    const response: Response = await fetch(`${API_URL}/data/${object_id}`, {
+        method: 'PATCH',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(updateFields)
     });
     if (!response.ok) {
-        throw new Error(`Failed to update datapoint with object_id ${data.object_id}`);
+        const errText = await response.text();
+        throw new Error(`PATCH ${object_id} failed: ${response.status} ${errText}`);
     }
     const responseData = await response.json();
     return responseData;
-}
+};
 
 export const deleteData = async (object_id: string): Promise<Datapoint | null> => {
     const response: Response = await fetch(`${API_URL}/data/${object_id}`, {
         method: 'DELETE',
     });
-    // the server returns a 204 No Content response if the delete was successful
     if (response.status === 204) {
         return null;
     } else if (!response.ok) {

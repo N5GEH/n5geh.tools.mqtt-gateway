@@ -28,15 +28,21 @@
 
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
-    if (!isMultiTenancy) {
-      formState.fiware_service = ''; // Clear fiware_service if multi-tenancy is not enabled
-    }
+    // Build payload directly from formState to avoid race condition with run()
+    const payload: Datapoint = {
+      object_id: formState.object_id || undefined,
+      jsonpath: formState.jsonpath || '',
+      topic: formState.topic || '',
+      description: formState.description || '',
+      entity_id: formState.entity_id ?? null,
+      entity_type: formState.entity_type ?? null,
+      attribute_name: formState.attribute_name ?? null,
+      connected: formState.connected ?? false,
+      fiware_service: isMultiTenancy ? (formState.fiware_service || '') : undefined,
+    };
     try {
-      const dp = $newDatapoint;
-      if (!dp) return;
-      await addData(dp);
-      await refreshData(); // Refresh the data after adding a new datapoint
-      // Reset formState after successful addition
+      await addData(payload);
+      await refreshData();
       formState = {
         object_id: undefined,
         jsonpath: '',
@@ -48,11 +54,12 @@
         connected: false,
         fiware_service: '',
       };
-      isMultiTenancy = false; // Reset the multi-tenancy checkbox
+      isMultiTenancy = false;
     } catch (e) {
       console.error('An error occurred while adding the data:', e);
     }
   };
+
 </script>
 
 <form onsubmit={preventDefault(handleSubmit)}>
