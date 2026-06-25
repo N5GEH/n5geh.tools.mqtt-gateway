@@ -1,0 +1,61 @@
+name: Sphinx Documentation & GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Sphinx Dependencies
+        run: pip install -r docs/requirements.txt
+
+      - name: Build Sphinx Documentation
+        run: |
+          cd docs
+          mkdir -p docs_output
+          sphinx-build -b html source/ docs_output
+
+      - name: Generate Badge
+        run: |
+          mkdir -p docs/docs_output
+          anybadge --value="passing" --file=docs/docs_output/doc.svg --label=documentation
+
+      - name: Setup GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Docs Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/docs_output
+
+  deploy:
+    needs: docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

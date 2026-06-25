@@ -1,8 +1,26 @@
 # MQTT Gateway
 
 ## Overview
-This is a universal MQTT gateway for the NGSI-V2 Context Broker, e.g. FIWARE-Orion. It supports any MQTT-based data ingress, using JSON as payload format. Data points can be simply registed using jsonpath and MQTT-topic.
-It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte](https://svelte.dev/).
+This is a universal MQTT gateway for the NGSI-V2 Context Broker, e.g. FIWARE-Orion. It supports any MQTT-based data ingress, using JSON as payload format. Data points can be simply registered using jsonpath and MQTT-topic.
+It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte 5](https://svelte.dev/).
+
+### Architecture
+
+The gateway consists of three containers:
+
+| Component | Technology | Role |
+|-----------|-----------|------|
+| **REST API** | FastAPI + Pydantic v2 | CRUD operations for datapoints, system health checks |
+| **MQTT Gateway** | Python + [aiomqtt](https://github.com/sbtinstruments/aiomqtt) (MQTT v5) | Subscribes to MQTT topics, extracts JSON values via JsonPath, forwards to Orion |
+| **Web UI** | Svelte 5 + TypeScript 5.9 + Vite 8 | Data point management interface with live status |
+
+Backing services: PostgreSQL (datapoint storage), Redis (caching + inter-process messaging via Streams).
+
+Key features:
+- **Async MQTT v5 client** (migrated from asyncio-mqtt to aiomqtt for maintained dependency)
+- **Partial updates** via `PATCH /data/{id}` endpoint for editing individual fields
+- **Multi-tenancy** support with per-datapoint FIWARE service override
+- **Automatic match detection** — verifies entity/attribute existence in Orion on creation and update
 
 
 ## Quickstart
@@ -65,22 +83,43 @@ docker compose up -d
 ```
 
 ### API interaction
-After deploying the gateway, you can access a swagger API specification under the end point `/docs`.
-For example, if the gateway is deployed locally, then you can access the swagger ui through [localhost:8000/docs](http://localhost:8000/docs)
+After deploying the gateway, you can access a Swagger API specification at `/docs`.
+For example, if deployed locally: [localhost:8000/docs](http://localhost:8000/docs)
+
+Full endpoint reference:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/data` | List/filter all datapoints |
+| `GET` | `/data/{id}` | Get a single datapoint |
+| `POST` | `/data` | Create a new datapoint |
+| `PUT` | `/data/{id}` | Fully replace entity mapping |
+| `PATCH` | `/data/{id}` | Partially update a datapoint |
+| `DELETE` | `/data/{id}` | Delete a single datapoint |
+| `DELETE` | `/data` | Delete all datapoints |
+| `GET` | `/data/{id}/status` | Check Orion match status |
+| `GET` | `/system/status` | Health check (Orion, Postgres, Redis) |
+| `GET` | `/system/version` | Version info |
+
+Detailed documentation is available in the [Sphinx docs](docs/source/usage.rst).
 
 ### Environment variables
 The gateway can be configured with the following environment variables:
 - `ORION_URL` - the URL of the Orion Context Broker
 - `MQTT_HOST` - the hostname of the MQTT broker
 - `MQTT_PORT` - the port of the MQTT broker
+- `MQTT_USER` - (optional) username for MQTT broker authentication
+- `MQTT_PASSWORD` - (optional) password for MQTT broker authentication
+- `MQTT_TLS` - whether to use TLS for MQTT connections (`true`/`false`, default: `false`)
 - `POSTGRES_HOST` - the hostname of the PostgreSQL database
 - `POSTGRES_USER` - the username for the PostgreSQL database
 - `POSTGRES_PASSWORD` - the password for the PostgreSQL database
 - `POSTGRES_DB` - the name of the PostgreSQL database
-- `REDIS_URL` - the URL of the Redis database (used for caching)
+- `REDIS_URL` - the URL of the Redis database (used for caching and inter-process messaging)
 - `FIWARE_SERVICE` - the FIWARE service name
 - `FIWARE_SERVICEPATH` - the FIWARE service path
 - `VITE_API_URL` - the URL to access the Gateway API from the client side (i.e., from your browser)
+- `LOG_LEVEL` - logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (default: `INFO`)
 - `AUTH_ENABLED` - whether the authentication is enabled
 
 Following environment variables are required if `AUTH_ENABLED` is set to `true`
@@ -106,3 +145,16 @@ Following environment variables are required if `AUTH_ENABLED` is set to `true`
 
 #### Message loss
 ![Message loss](load-tests/results/gateway4x_message_loss_bar.png "Message loss")
+
+## Documentation
+
+Detailed documentation is built with Sphinx and available in the [docs/](docs/) directory.
+To build locally:
+```bash
+cd docs
+pip install -r requirements.txt
+make html
+# Output: docs/_build/html/index.html
+```
+
+On push to `main`, the documentation is automatically built and deployed to GitHub Pages via the [docs workflow](.github/workflows/docs.yml).
