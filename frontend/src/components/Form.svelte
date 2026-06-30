@@ -1,55 +1,68 @@
 <!-- Form.svelte -->
 <script lang="ts">
+  import { run, preventDefault } from 'svelte/legacy';
+
   import { newDatapoint } from '../stores/stores';
   import type { Datapoint } from '../services/api';
   import { addData } from '../services/api';
   import { refreshData } from '../services/dataService';
 
-  let formState: Partial<Datapoint> = {
-    object_id: null,
+  let formState: Partial<Datapoint> = $state({
+    object_id: undefined,
     jsonpath: '',
     topic: '',
     description: '',
-    entity_id: null,
-    entity_type: null,
-    attribute_name: null,
+    entity_id: undefined,
+    entity_type: undefined,
+    attribute_name: undefined,
     connected: false,
     fiware_service: '',
-  };
+  });
 
-  let isMultiTenancy = false; // New state for multi-tenancy checkbox
+  let isMultiTenancy = $state(false); // New state for multi-tenancy checkbox
 
   // Reactive statement that updates whenever formState changes
-  $: newDatapoint.set(formState as Datapoint);
+  run(() => {
+    newDatapoint.set(formState as Datapoint);
+  });
 
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
-    if (!isMultiTenancy) {
-      formState.fiware_service = ''; // Clear fiware_service if multi-tenancy is not enabled
-    }
+    // Build payload directly from formState to avoid race condition with run()
+    const payload: Datapoint = {
+      object_id: formState.object_id || undefined,
+      jsonpath: formState.jsonpath || '',
+      topic: formState.topic || '',
+      description: formState.description || '',
+      entity_id: formState.entity_id ?? null,
+      entity_type: formState.entity_type ?? null,
+      attribute_name: formState.attribute_name ?? null,
+      connected: formState.connected ?? false,
+      fiware_service: isMultiTenancy ? (formState.fiware_service || '') : undefined,
+    };
     try {
-      await addData($newDatapoint);
-      await refreshData(); // Refresh the data after adding a new datapoint
-      // Reset formState after successful addition
+      await addData(payload);
+      await refreshData();
       formState = {
-        object_id: null,
+        object_id: undefined,
         jsonpath: '',
         topic: '',
         description: '',
-        entity_id: null,
-        entity_type: null,
-        attribute_name: null,
+        entity_id: undefined,
+        entity_type: undefined,
+        attribute_name: undefined,
         connected: false,
         fiware_service: '',
       };
-      isMultiTenancy = false; // Reset the multi-tenancy checkbox
+      isMultiTenancy = false;
     } catch (e) {
       console.error('An error occurred while adding the data:', e);
     }
   };
+
 </script>
 
-<form on:submit|preventDefault={handleSubmit}>
+<form onsubmit={preventDefault(handleSubmit)}>
   <!-- Input field for object_id -->
   <label for="object_id">Object ID</label>
   <input type="text" id="object_id" bind:value={formState.object_id} />

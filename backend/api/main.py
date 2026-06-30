@@ -651,11 +651,15 @@ async def get_match_status(
     if row is None:
         raise HTTPException(status_code=404, detail="Datapoint not found!")
 
+    entity_id = row['entity_id']
+    attribute_name = row['attribute_name']
+    entity_type = row['entity_type']
+    fiware_service = row['fiware_service']
+
+    if not entity_id or not attribute_name or not entity_type:
+        return False
+
     async with aiohttp.ClientSession() as session:
-        entity_id = row['entity_id']
-        attribute_name = row['attribute_name']
-        entity_type = row['entity_type']
-        fiware_service = row['fiware_service']
         url = f"{ORION_URL}/v2/entities/{entity_id}/attrs/{attribute_name}/?type={entity_type}"
         headers = await build_orion_headers(session, fiware_service)
         async with session.get(url, headers=headers) as response:
