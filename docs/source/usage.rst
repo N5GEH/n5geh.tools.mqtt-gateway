@@ -349,6 +349,12 @@ The Web UI is built with Svelte 5 and TypeScript. It has two main areas:
 - **Right panel** — a form for adding new datapoints
 - **Top bar** — system health indicators (Orion, Postgres, Redis)
 
+.. figure:: _images/ui_overview.png
+   :alt: IoT Gateway UI overview with empty datapoint table
+   :width: 100%
+
+   The IoT Gateway web interface on first load — empty table and form ready for input.
+
 Health Check
 ------------
 
@@ -385,6 +391,18 @@ Mode 1: Create DP with Generated Object ID
 The API auto-generates a random 6-character object ID. The gateway subscribes
 to the MQTT topic and the DP appears in the table.
 
+.. figure:: _images/mode1_form.png
+   :alt: Form filled in for Mode 1 — no Object ID, JsonPATH and Topic provided
+   :width: 100%
+
+   Mode 1: Form filled with JsonPATH and Topic, Object ID left empty.
+
+.. figure:: _images/mode1_result.png
+   :alt: Table showing the newly added datapoint with an auto-generated ID at the bottom
+   :width: 100%
+
+   Mode 1 result: the new datapoint with auto-generated ID appears at the bottom of the table.
+
 Mode 2: Create DP with Custom Object ID
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -393,6 +411,18 @@ Mode 2: Create DP with Custom Object ID
 #. Click **"Add Datapoint"**
 
 If the object_id already exists, you'll get a ``409`` error.
+
+.. figure:: _images/mode2_form.png
+   :alt: Form filled with a custom Object ID solar-inverter_01
+   :width: 100%
+
+   Mode 2: Custom Object ID ``solar-inverter_01`` entered alongside JsonPATH and Topic.
+
+.. figure:: _images/mode2_result.png
+   :alt: Table showing three datapoints including solar-inverter_01
+   :width: 100%
+
+   Mode 2 result: the custom-ID datapoint appears in the table alongside existing entries.
 
 Mode 3: Create DP with Matching (Connected DP)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -408,6 +438,18 @@ Mode 3: Create DP with Matching (Connected DP)
 If Orion returns ``200``, the entity/attribute pair exists and the datapoint is
 marked as **connected** (``connected: true`` in the database, shown as **"Match found"**
 in the table). If Orion returns anything else, it's marked as **"No match"**.
+
+.. figure:: _images/mode3_form.png
+   :alt: Form with Match Datapoint and Multi Tenancy checked, entity fields filled
+   :width: 100%
+
+   Mode 3: "Match Datapoint" and "Multi Tenancy" checked, entity fields and FIWARE Service filled in.
+
+.. figure:: _images/mode3_result.png
+   :alt: Table showing datapoint with Match found status
+   :width: 100%
+
+   Mode 3 result: datapoint shows **Match found** — Orion confirmed the entity and attribute exist.
 
 When a message arrives on the subscribed topic, the gateway:
 
@@ -431,6 +473,18 @@ Updating an Existing Datapoint
    (but NOT JsonPATH or Topic)
 #. Click **"Save"** to confirm, or **"Cancel"** to discard
 
+.. figure:: _images/update_edit_mode.png
+   :alt: Table row in edit mode with Description, entity fields and FIWARE Service editable
+   :width: 100%
+
+   Configure mode: the row switches to inline edit — Description, Entity ID, Entity Type, Attribute Name, and FIWARE Service become editable.
+
+.. figure:: _images/update_result.png
+   :alt: Table after saving the updated description
+   :width: 100%
+
+   After saving: the updated description is reflected in the table and the match status is re-checked.
+
 The frontend sends a ``PATCH /data/{object_id}`` with only the changed fields.
 After saving, the match status is re-checked against Orion.
 
@@ -440,3 +494,15 @@ Deleting a Datapoint
 #. Click **"Delete"** on the row you want to remove
 #. The DP is removed from the database and Redis cache
 #. If no other datapoints share the same MQTT topic, the gateway unsubscribes from it
+
+.. figure:: _images/delete_before.png
+   :alt: Table with three datapoints, Delete button about to be clicked on the bottom row
+   :width: 100%
+
+   Click **"Delete"** on the row you want to remove.
+
+.. figure:: _images/delete_result.png
+   :alt: Table after deletion showing only two remaining datapoints
+   :width: 100%
+
+   After deletion: the datapoint is removed from the table and the gateway unsubscribes from its topic if no other datapoints share it.
