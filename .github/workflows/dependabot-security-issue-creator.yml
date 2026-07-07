@@ -28,6 +28,7 @@ jobs:
 
             if (openAlerts.length === 0) {
               core.notice('No Dependabot alerts found.');
+              core.setOutput('alerts', '[]');
               return;
             }
 
@@ -80,7 +81,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const alerts = JSON.parse(process.env.ALERTS);
+            const alerts = JSON.parse(process.env.ALERTS || '[]');
             if (!alerts || alerts.length === 0) {
               console.log('No alerts to create issues for.');
               return;
