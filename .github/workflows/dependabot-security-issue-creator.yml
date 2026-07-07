@@ -20,21 +20,38 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const alerts = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
+            const alertsResponse = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
               per_page: 100
             });
 
-            if (!alerts.data || alerts.data.length === 0) {
+            const openAlerts = (alertsResponse.data || []).filter(alert => alert.state === 'open');
+
+            if (openAlerts.length === 0) {
               core.notice('No Dependabot alerts found.');
               return;
             }
 
-            core.setOutput('alerts', JSON.stringify(alerts.data.map(alert => ({
+            const latestAlertsByPackage = new Map();
+
+            for (const alert of openAlerts) {
+              const packageName = alert.dependency?.package?.name || 'dependabot issues';
+              const ecosystem = alert.dependency?.package?.ecosystem || 'unknown';
+              const packageKey = `${ecosystem}:${packageName}`;
+              const currentAlert = latestAlertsByPackage.get(packageKey);
+
+              if (!currentAlert || new Date(alert.created_at) > new Date(currentAlert.created_at)) {
+                latestAlertsByPackage.set(packageKey, alert);
+              }
+            }
+
+            core.setOutput('alerts', JSON.stringify(Array.from(latestAlertsByPackage.values()).map(alert => ({
               number: alert.number,
-              package_name: alert.security_advisory?.identifiers[0]?.value || 'dependabot issues',
-              severity: alert.security_advisory.severity,
-              summary: alert.security_advisory.summary,
-              url: alert.html_url
+              package_name: alert.dependency?.package?.name || 'dependabot issues',
+              ecosystem: alert.dependency?.package?.ecosystem || 'unknown',
+              severity: alert.security_advisory?.severity || 'unknown',
+              summary: alert.security_advisory?.summary || '',
+              url: alert.html_url,
+              created_at: alert.created_at
             }))));
 
       - name: Get milestone ID
@@ -81,15 +98,15 @@ jobs:
                 continue;
               }
 
-              const alertNumber = alert.url.split('/').pop();
-              const issueTitle = `Security Alert: Dependabot issue (${alertNumber}) - ${alert.severity}`;
+              const issueTitle = `Security Alert: Dependabot issue (${alert.ecosystem}/${alert.package_name}) - ${alert.severity}`;
 
               const issueExists = existingIssues.data.some(issue => issue.title === issueTitle);
               if (issueExists) {
-                console.log(`Issue already exists for alert ${alertNumber}. Skipping creation.`);
+                console.log(`Issue already exists for ${alert.ecosystem}/${alert.package_name}. Skipping creation.`);
                 continue;
               }
 
+              const alertNumber = alert.url.split('/').pop();
               const issueBody = `A security vulnerability has been detected in the **${alert.package_name}** package.
               
               **Severity**: ${alert.severity}
