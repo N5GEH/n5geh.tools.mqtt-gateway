@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 309-fix-pipeline-error
 
 jobs:
   create_issues_from_alerts:
@@ -17,7 +18,7 @@ jobs:
         id: fetch_alerts
         uses: actions/github-script@v5
         with:
-          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const alerts = await github.request('GET /repos/' + context.repo.owner + '/' + context.repo.repo + '/dependabot/alerts', {
               per_page: 100
@@ -40,7 +41,7 @@ jobs:
         id: get_milestone
         uses: actions/github-script@v5
         with:
-          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const milestones = await github.rest.issues.listMilestones({
               owner: context.repo.owner,
@@ -60,7 +61,7 @@ jobs:
           ALERTS: ${{ steps.fetch_alerts.outputs.alerts }}
           MILESTONE_ID: ${{ steps.get_milestone.outputs.milestone_id }}
         with:
-          github-token: ${{ secrets.DEPENDABOT_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const alerts = JSON.parse(process.env.ALERTS);
             if (!alerts || alerts.length === 0) {
