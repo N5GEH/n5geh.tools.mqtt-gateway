@@ -4,6 +4,10 @@
 This is a universal MQTT gateway for the NGSI-V2 Context Broker, e.g. FIWARE-Orion. It supports any MQTT-based data ingress, using JSON as payload format. Data points can be simply registered using jsonpath and MQTT-topic.
 It acts as a software-based IoT Gateway that helps manage heterogeneous field devices. The gateway is implemented in Python and uses the [FastAPI](https://fastapi.tiangolo.com/) framework for a RESTful-API. A web-UI is also provided based on [Svelte 5](https://svelte.dev/).
 
+## Documentation
+
+A detailed documentation is built with Sphinx and available via [GitHub Pages](https://n5geh.github.io/n5geh.tools.mqtt-gateway/).
+
 ### Architecture
 
 The gateway consists of three containers:

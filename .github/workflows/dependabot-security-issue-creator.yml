@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 309-fix-pipeline-error
 
 jobs:
   create_issues_from_alerts:
