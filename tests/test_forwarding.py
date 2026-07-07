@@ -4,8 +4,8 @@ from filip.clients.ngsi_v2 import ContextBrokerClient
 from filip.models import FiwareHeader
 from filip.models.ngsi_v2.context import ContextEntity
 from backend.api.main import Datapoint
-from test_init import TestInit
-from test_settings import settings
+from tests.test_init import TestInit
+from tests.test_settings import settings
 import requests
 import random
 
